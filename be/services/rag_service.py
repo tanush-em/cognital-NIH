@@ -7,6 +7,7 @@ from chromadb.config import Settings
 from sentence_transformers import SentenceTransformer
 from typing import List, Dict, Any
 import logging
+from .pdf_processor import pdf_processor
 
 logger = logging.getLogger(__name__)
 
@@ -26,6 +27,42 @@ class RAGService:
                 name="telecom_knowledge",
                 metadata={"description": "Telecom support knowledge base"}
             )
+        
+        # Auto-load PDFs from resources folder
+        self._auto_load_pdfs()
+    
+    def _auto_load_pdfs(self):
+        """Automatically load PDFs from resources folder on startup"""
+        try:
+            # Get documents from PDF processor
+            pdf_documents = pdf_processor.get_documents_for_rag()
+            
+            if pdf_documents:
+                logger.info(f"Auto-loading {len(pdf_documents)} PDF documents from resources folder")
+                success = self.add_documents(pdf_documents)
+                if success:
+                    logger.info("Successfully auto-loaded PDF documents")
+                else:
+                    logger.warning("Failed to auto-load some PDF documents")
+            else:
+                logger.info("No PDF documents found in resources folder")
+                
+        except Exception as e:
+            logger.error(f"Error auto-loading PDFs: {str(e)}")
+    
+    def reload_pdfs(self) -> bool:
+        """Reload all PDFs from resources folder"""
+        try:
+            # Clear existing collection
+            self.collection.delete(where={})
+            
+            # Reload PDFs
+            self._auto_load_pdfs()
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error reloading PDFs: {str(e)}")
+            return False
     
     def add_documents(self, documents: List[Dict[str, Any]]) -> bool:
         """Add documents to the knowledge base"""

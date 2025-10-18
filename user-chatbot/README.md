@@ -68,7 +68,7 @@ The app expects a Flask backend with Socket.IO support running on `http://localh
 ## Key Components
 
 ### ChatWindow.js
-- Main chat interface with message history
+- Main chat interface with real-time messaging
 - Input handling and message sending
 - Connection status monitoring
 - Escalation message display

@@ -3,9 +3,12 @@ Admin API routes for document ingestion and management
 """
 from flask import Blueprint, request, jsonify
 from services.rag_service import rag_service
+from services.pdf_processor import pdf_processor
 from models.user_models import User, Agent
 from utils.db import db
 import logging
+import os
+from werkzeug.utils import secure_filename
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +43,109 @@ def ingest_documents():
             
     except Exception as e:
         logger.error(f"Error ingesting documents: {str(e)}")
+        return jsonify({'error': 'Internal server error'}), 500
+
+@admin_bp.route('/upload-pdf', methods=['POST'])
+def upload_pdf():
+    """Upload PDF file to resources folder and process it"""
+    try:
+        if 'file' not in request.files:
+            return jsonify({'error': 'No file provided'}), 400
+        
+        file = request.files['file']
+        if file.filename == '':
+            return jsonify({'error': 'No file selected'}), 400
+        
+        if not file.filename.lower().endswith('.pdf'):
+            return jsonify({'error': 'Only PDF files are allowed'}), 400
+        
+        # Secure filename and save to resources folder
+        filename = secure_filename(file.filename)
+        file_path = os.path.join('resources', filename)
+        
+        # Ensure resources directory exists
+        os.makedirs('resources', exist_ok=True)
+        
+        # Save file
+        file.save(file_path)
+        
+        # Process the PDF
+        result = pdf_processor.add_pdf_file(file_path)
+        
+        if result['success']:
+            # Add to RAG service
+            rag_document = {
+                'content': result['content'],
+                'title': result['filename'],
+                'source': 'pdf_upload',
+                'file_path': result['file_path'],
+                'extraction_method': result['extraction_method']
+            }
+            
+            rag_success = rag_service.add_documents([rag_document])
+            
+            if rag_success:
+                return jsonify({
+                    'success': True,
+                    'message': f'Successfully uploaded and processed PDF: {filename}',
+                    'filename': filename,
+                    'extraction_method': result['extraction_method'],
+                    'content_length': len(result['content'])
+                })
+            else:
+                return jsonify({'error': 'Failed to add PDF to knowledge base'}), 500
+        else:
+            return jsonify({
+                'error': f'Failed to process PDF: {result.get("error", "Unknown error")}'
+            }), 500
+            
+    except Exception as e:
+        logger.error(f"Error uploading PDF: {str(e)}")
+        return jsonify({'error': 'Internal server error'}), 500
+
+@admin_bp.route('/reload-pdfs', methods=['POST'])
+def reload_pdfs():
+    """Reload all PDFs from resources folder"""
+    try:
+        success = rag_service.reload_pdfs()
+        
+        if success:
+            return jsonify({
+                'success': True,
+                'message': 'Successfully reloaded all PDFs from resources folder'
+            })
+        else:
+            return jsonify({'error': 'Failed to reload PDFs'}), 500
+            
+    except Exception as e:
+        logger.error(f"Error reloading PDFs: {str(e)}")
+        return jsonify({'error': 'Internal server error'}), 500
+
+@admin_bp.route('/pdfs', methods=['GET'])
+def list_pdfs():
+    """List all PDF files in resources folder"""
+    try:
+        pdf_files = pdf_processor.get_pdf_files()
+        pdf_info = []
+        
+        for pdf_path in pdf_files:
+            filename = os.path.basename(pdf_path)
+            file_size = os.path.getsize(pdf_path)
+            pdf_info.append({
+                'filename': filename,
+                'file_path': pdf_path,
+                'size_bytes': file_size,
+                'size_mb': round(file_size / (1024 * 1024), 2)
+            })
+        
+        return jsonify({
+            'success': True,
+            'pdf_files': pdf_info,
+            'count': len(pdf_info)
+        })
+        
+    except Exception as e:
+        logger.error(f"Error listing PDFs: {str(e)}")
         return jsonify({'error': 'Internal server error'}), 500
 
 @admin_bp.route('/users', methods=['POST'])

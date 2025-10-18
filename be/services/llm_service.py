@@ -16,25 +16,17 @@ class LLMService:
             raise ValueError("GROQ_API_KEY environment variable is required")
         
         self.client = Groq(api_key=api_key)
-        self.model = "llama3-8b-8192"  # Default model
+        self.model = "llama-3.1-8b-instant"  # Updated model
     
     def generate_response(self, 
                         user_message: str, 
-                        context: str = "", 
-                        conversation_history: list = None) -> Dict[str, Any]:
+                        context: str = "") -> Dict[str, Any]:
         """Generate AI response using Groq API"""
         try:
             # Build conversation context
             system_prompt = self._build_system_prompt(context)
             messages = [{"role": "system", "content": system_prompt}]
             
-            # Add conversation history
-            if conversation_history:
-                for msg in conversation_history[-10:]:  # Limit to last 10 messages
-                    messages.append({
-                        "role": msg.get('role', 'user'),
-                        "content": msg.get('content', '')
-                    })
             
             # Add current user message
             messages.append({"role": "user", "content": user_message})

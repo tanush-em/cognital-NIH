@@ -7,10 +7,13 @@ import {
   Typography,
   CircularProgress,
   Alert,
-  Fade
+  Fade,
+  IconButton,
+  Tooltip
 } from '@mui/material';
-import { Send, Phone } from '@mui/icons-material';
+import { Send, Phone, CloudUpload } from '@mui/icons-material';
 import MessageBubble from './MessageBubble';
+import PDFUpload from './PDFUpload';
 import socketManager from '../socket';
 
 const ChatWindow = () => {
@@ -20,6 +23,7 @@ const ChatWindow = () => {
   const [isConnected, setIsConnected] = useState(false);
   const [escalationMessage, setEscalationMessage] = useState('');
   const [showEscalation, setShowEscalation] = useState(false);
+  const [showPDFUpload, setShowPDFUpload] = useState(false);
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
 
@@ -44,8 +48,8 @@ const ChatWindow = () => {
     checkConnection();
     const interval = setInterval(checkConnection, 1000);
 
-    // Listen for messages
-    socketManager.onMessage((data) => {
+    // Listen for messages - use a ref to prevent duplicate processing
+    const messageHandler = (data) => {
       console.log('Received message:', data);
       
       if (data.type === 'escalation') {
@@ -58,26 +62,34 @@ const ChatWindow = () => {
           setShowEscalation(false);
         }, 3000);
       } else {
-        const newMessage = {
-          id: Date.now() + Math.random(),
-          message: data.message || data.text,
-          sender: data.sender || (data.type === 'agent' ? 'agent' : 'ai'),
-          timestamp: data.timestamp || new Date().toISOString()
-        };
-        
-        setMessages(prev => [...prev, newMessage]);
-        setIsTyping(false);
+        // Only process if it's not a user message (to avoid duplicates)
+        if (data.sender !== 'user') {
+          const newMessage = {
+            id: Date.now() + Math.random(),
+            message: data.message || data.text,
+            sender: data.sender || (data.type === 'agent' ? 'agent' : 'ai'),
+            timestamp: data.timestamp || new Date().toISOString(),
+            confidence: data.confidence
+          };
+          
+          setMessages(prev => [...prev, newMessage]);
+          setIsTyping(false);
+        }
       }
-    });
+    };
+
+    socketManager.onMessage(messageHandler);
 
     // Listen for typing indicators
-    socketManager.onTypingIndicator((data) => {
+    const typingHandler = (data) => {
       if (data.isTyping) {
         setIsTyping(true);
       } else {
         setIsTyping(false);
       }
-    });
+    };
+
+    socketManager.onTypingIndicator(typingHandler);
 
     // Add welcome message
     setMessages([{
@@ -89,6 +101,8 @@ const ChatWindow = () => {
 
     return () => {
       clearInterval(interval);
+      // Clean up event listeners
+      socketManager.removeAllListeners();
     };
   }, []);
 
@@ -150,6 +164,15 @@ const ChatWindow = () => {
             Telecom Support Assistant
           </Typography>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Tooltip title="Upload PDF Documents">
+              <IconButton 
+                onClick={() => setShowPDFUpload(true)}
+                sx={{ color: 'white' }}
+                size="small"
+              >
+                <CloudUpload />
+              </IconButton>
+            </Tooltip>
             <Box
               sx={{
                 width: 8,
@@ -269,6 +292,12 @@ const ChatWindow = () => {
           </Typography>
         )}
       </Paper>
+
+      {/* PDF Upload Dialog */}
+      <PDFUpload 
+        open={showPDFUpload} 
+        onClose={() => setShowPDFUpload(false)} 
+      />
     </Box>
   );
 };

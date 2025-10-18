@@ -15,7 +15,7 @@ A comprehensive Flask-based backend system for an AI-powered telecom support cha
 ## 🛠 Tech Stack
 
 - **Backend**: Flask, Flask-SocketIO
-- **Database**: SQLite (default) / PostgreSQL
+- **Database**: SQLite (for sessions and escalations only)
 - **Vector DB**: ChromaDB for RAG
 - **LLM**: Groq API (Llama3-8b-8192)
 - **Real-time**: WebSocket communication
@@ -30,7 +30,7 @@ be/
 ├── .env                  # Environment configuration
 ├── models/               # Database models
 │   ├── __init__.py
-│   ├── chat_models.py    # Chat, Message, Escalation models
+│   ├── chat_models.py    # Chat, Escalation models
 │   └── user_models.py    # User, Agent models
 ├── services/             # Business logic services
 │   ├── rag_service.py    # RAG with ChromaDB
@@ -87,7 +87,6 @@ The server will start on `http://localhost:5000`
 
 - `POST /api/ask` - Manual AI query (testing)
 - `POST /api/escalate` - Force escalation (testing)
-- `GET /api/sessions/<id>/messages` - Get session messages
 - `POST /api/sessions` - Create new chat session
 - `GET /api/agents/available` - Get available agents
 
@@ -114,7 +113,7 @@ The server will start on `http://localhost:5000`
 The system automatically escalates conversations based on:
 
 1. **Low Confidence** (< 0.6)
-2. **Long Conversations** (> 10 messages)
+2. **Long Conversations** (> 10 message exchanges)
 3. **Frustration Keywords**: "refund", "cancel", "angry", "not working", etc.
 4. **Sensitive Topics**: "billing dispute", "service outage", etc.
 
@@ -196,9 +195,6 @@ socket.on('new_message', (data) => {
 ### Chat Sessions
 - `id`, `session_id`, `user_id`, `agent_id`, `room_id`, `status`, `created_at`, `updated_at`
 
-### Messages
-- `id`, `session_id`, `role`, `content`, `confidence`, `timestamp`
-
 ### Escalations
 - `id`, `session_id`, `reason`, `triggered_at`, `handled_at`, `status`
 
@@ -223,7 +219,7 @@ socket.on('new_message', (data) => {
 
 - Health check endpoint: `/api/health`
 - Logging to `./static/logs/chatbot.log`
-- Database query monitoring
+- WebSocket connection monitoring
 - Performance metrics
 
 ## 🧪 Testing
@@ -238,7 +234,7 @@ Test the system with the provided endpoints:
 ## 🚀 Production Deployment
 
 1. Set `FLASK_DEBUG=False`
-2. Use PostgreSQL database
+2. Configure production database (if needed)
 3. Configure proper CORS origins
 4. Set up SSL/TLS
 5. Use environment variables for secrets

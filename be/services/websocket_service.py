@@ -109,6 +109,76 @@ class WebSocketService:
             except Exception as e:
                 logger.error(f"Error handling message: {str(e)}")
                 emit('error', {'message': 'Failed to process message'})
+        
+        @self.socketio.on('join_session')
+        def handle_join_session(data):
+            """Handle joining a session"""
+            try:
+                session_id = data.get('sessionId')
+                if not session_id:
+                    emit('error', {'message': 'Session ID required'})
+                    return
+                
+                # Get or create session
+                session = ChatSession.query.filter_by(session_id=session_id).first()
+                if not session:
+                    # Create new session
+                    session = ChatSession(
+                        session_id=session_id,
+                        user_id='user_' + session_id.split('_')[-1],  # Extract user ID from session
+                        room_id=f'room_{session_id}',
+                        status='active'
+                    )
+                    db.session.add(session)
+                    db.session.commit()
+                    logger.info(f"Created new session: {session_id}")
+                
+                # Join the room
+                join_room(session.room_id)
+                
+                emit('joined_session', {
+                    'session_id': session.session_id,
+                    'room_id': session.room_id,
+                    'status': session.status
+                })
+                
+            except Exception as e:
+                logger.error(f"Error joining session: {str(e)}")
+                emit('error', {'message': 'Failed to join session'})
+        
+        @self.socketio.on('user_message')
+        def handle_user_message(data):
+            """Handle user messages directly"""
+            try:
+                session_id = data.get('sessionId')
+                message = data.get('message')
+                message_type = data.get('messageType', 'user')
+                timestamp = data.get('timestamp')
+                
+                if not all([session_id, message]):
+                    emit('error', {'message': 'Missing required fields'})
+                    return
+                
+                # Get session by session_id (string) not id (integer)
+                session = ChatSession.query.filter_by(session_id=session_id).first()
+                if not session:
+                    emit('error', {'message': 'Session not found'})
+                    return
+                
+                # Broadcast user message to room
+                self.socketio.emit('new_message', {
+                    'role': 'user',
+                    'content': message,
+                    'timestamp': datetime.utcnow().isoformat(),
+                    'session_id': session.id
+                }, room=session.room_id)
+                
+                # Handle user message
+                self._handle_user_message(session, message, session.room_id)
+                    
+            except Exception as e:
+                logger.error(f"Error handling user message: {str(e)}")
+                emit('error', {'message': 'Failed to process message'})
     
     def _get_or_create_session(self, room_id, user_id, user_type):
         """Get existing session or create new one"""
@@ -142,10 +212,9 @@ class WebSocketService:
     def _handle_user_message(self, session, message, room_id):
         """Handle user message - either respond with AI or escalate"""
         try:
-            # Check if should escalate
-            escalation_check = escalation_service.should_escalate(
-                session.id, message, 0.8  # Default confidence
-            )
+            # For now, skip escalation check to avoid hanging
+            # TODO: Fix escalation service database issues
+            escalation_check = {'should_escalate': False, 'reasons': []}
             
             if escalation_check['should_escalate']:
                 # Create escalation
@@ -178,6 +247,13 @@ class WebSocketService:
                 
         except Exception as e:
             logger.error(f"Error handling user message: {str(e)}")
+            # Send error message to user
+            self.socketio.emit('new_message', {
+                'role': 'ai',
+                'content': "I apologize, but I'm having trouble processing your request. Please try again.",
+                'timestamp': datetime.utcnow().isoformat(),
+                'session_id': session.id
+            }, room=room_id)
     
     def _handle_agent_message(self, session, message, room_id):
         """Handle agent message"""
@@ -191,17 +267,17 @@ class WebSocketService:
     def _generate_ai_response(self, session, user_message, room_id):
         """Generate AI response using RAG and LLM"""
         try:
+            # Emit typing indicator
+            self.socketio.emit('ai_typing', {'typing': True}, room=room_id)
+            
             # Get relevant context
             context = rag_service.get_context_for_query(user_message)
             
-            # No conversation history - just use current message
-            conversation_history = []
             
             # Generate response
             response = llm_service.generate_response(
                 user_message=user_message,
-                context=context,
-                conversation_history=conversation_history
+                context=context
             )
             
             # Calculate confidence
@@ -209,6 +285,7 @@ class WebSocketService:
             
             
             # Broadcast AI response
+            logger.info(f"Emitting AI response to room {room_id}: {response['response'][:100]}...")
             self.socketio.emit('new_message', {
                 'role': 'ai',
                 'content': response['response'],
@@ -216,6 +293,9 @@ class WebSocketService:
                 'session_id': session.id,
                 'confidence': confidence
             }, room=room_id)
+            
+            # Emit typing complete
+            self.socketio.emit('ai_typing', {'typing': False}, room=room_id)
             
         except Exception as e:
             logger.error(f"Error generating AI response: {str(e)}")

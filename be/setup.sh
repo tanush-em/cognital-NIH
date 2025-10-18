@@ -33,6 +33,7 @@ pip install -r requirements.txt
 echo "📁 Creating directories..."
 mkdir -p static/logs
 mkdir -p chroma_db
+mkdir -p resources
 
 # Create .env file if it doesn't exist
 if [ ! -f ".env" ]; then
@@ -64,5 +65,8 @@ echo "3. Run: ./start.sh"
 echo ""
 echo "🧪 To test the API:"
 echo "   python test_api.py"
+echo ""
+echo "📄 To test PDF OCR integration:"
+echo "   python test_pdf_integration.py"
 echo ""
 echo "📚 For more information, see README.md"

@@ -2,7 +2,7 @@
 Escalation service for rule-based escalation logic
 """
 from typing import Dict, Any, List
-from models.chat_models import ChatSession, Message, Escalation
+from models.chat_models import ChatSession, Escalation
 from utils.db import db
 import logging
 
@@ -28,12 +28,13 @@ class EscalationService:
     def should_escalate(self, session_id: int, user_message: str, confidence: float) -> Dict[str, Any]:
         """Check if conversation should be escalated"""
         try:
-            # Get session and message count
+            # Get session
             session = ChatSession.query.get(session_id)
             if not session:
                 return {'should_escalate': False, 'reason': 'Session not found'}
             
-            message_count = Message.query.filter_by(session_id=session_id).count()
+            # No message count tracking since we removed message storage
+            message_count = 0
             
             # Check escalation rules
             escalation_reasons = []
@@ -42,9 +43,9 @@ class EscalationService:
             if confidence < self.escalation_rules['confidence_threshold']:
                 escalation_reasons.append(f"Low confidence ({confidence:.2f} < {self.escalation_rules['confidence_threshold']})")
             
-            # Rule 2: Too many messages
-            if message_count >= self.escalation_rules['message_count_threshold']:
-                escalation_reasons.append(f"Long conversation ({message_count} messages)")
+            # Rule 2: Message count disabled (no message storage)
+            # if message_count >= self.escalation_rules['message_count_threshold']:
+            #     escalation_reasons.append(f"Long conversation ({message_count} messages)")
             
             # Rule 3: Frustration keywords
             frustration_keywords_found = self._check_frustration_keywords(user_message)
@@ -151,9 +152,8 @@ class EscalationService:
             if not session:
                 return {}
             
-            # Get recent messages
-            recent_messages = Message.query.filter_by(session_id=session_id)\
-                .order_by(Message.timestamp.desc()).limit(5).all()
+            # No message history available (removed message storage)
+            recent_messages = []
             
             # Get user info
             from models.user_models import User
@@ -163,7 +163,7 @@ class EscalationService:
                 'session_id': session_id,
                 'room_id': session.room_id,
                 'user_info': user.to_dict() if user else {},
-                'recent_messages': [msg.to_dict() for msg in recent_messages],
+                'recent_messages': [],
                 'escalation_reason': 'Multiple escalation triggers detected'
             }
             

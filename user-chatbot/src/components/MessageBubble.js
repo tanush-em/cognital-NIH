@@ -1,5 +1,5 @@
 import React from 'react';
-import { Box, Typography, Avatar, Chip } from '@mui/material';
+import { Box, Typography, Avatar } from '@mui/material';
 import { Person, SmartToy, SupportAgent } from '@mui/icons-material';
 
 const MessageBubble = ({ message, sender, timestamp, isTyping = false }) => {

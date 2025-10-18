@@ -23,6 +23,16 @@ class SocketManager {
       this.createOrJoinSession();
     });
 
+    // Handle server connection confirmation
+    this.socket.on('connected', (data) => {
+      console.log('Server response:', data);
+    });
+
+    // Handle session join confirmation
+    this.socket.on('joined_session', (data) => {
+      console.log('Joined session:', data);
+    });
+
     this.socket.on('disconnect', () => {
       console.log('Disconnected from server');
       this.isConnected = false;
@@ -63,6 +73,25 @@ class SocketManager {
 
   onMessage(callback) {
     if (this.socket) {
+      // Remove existing listeners to prevent duplicates
+      this.socket.off('new_message');
+      this.socket.off('ai_response');
+      this.socket.off('agent_response');
+      this.socket.off('escalation');
+      
+      // Handle new message events from the updated WebSocket service
+      this.socket.on('new_message', (data) => {
+        console.log('New message received:', data);
+        callback({
+          type: data.role === 'ai' ? 'ai' : data.role === 'agent' ? 'agent' : 'user',
+          message: data.content,
+          sender: data.role,
+          timestamp: data.timestamp,
+          confidence: data.confidence
+        });
+      });
+      
+      // Legacy event handlers for backward compatibility
       this.socket.on('ai_response', callback);
       this.socket.on('agent_response', callback);
       this.socket.on('escalation', callback);
@@ -71,6 +100,20 @@ class SocketManager {
 
   onTypingIndicator(callback) {
     if (this.socket) {
+      // Remove existing listeners to prevent duplicates
+      this.socket.off('ai_typing');
+      this.socket.off('typing');
+      
+      // Handle AI typing events from the updated WebSocket service
+      this.socket.on('ai_typing', (data) => {
+        console.log('AI typing event:', data);
+        callback({
+          isTyping: data.typing,
+          sender: 'ai'
+        });
+      });
+      
+      // Legacy typing indicator
       this.socket.on('typing', callback);
     }
   }
@@ -86,6 +129,19 @@ class SocketManager {
       this.socket.disconnect();
       this.socket = null;
       this.isConnected = false;
+    }
+  }
+
+  removeAllListeners() {
+    if (this.socket) {
+      this.socket.off('new_message');
+      this.socket.off('ai_response');
+      this.socket.off('agent_response');
+      this.socket.off('escalation');
+      this.socket.off('ai_typing');
+      this.socket.off('typing');
+      this.socket.off('connected');
+      this.socket.off('joined_session');
     }
   }
 
