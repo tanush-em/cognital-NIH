@@ -34,7 +34,6 @@ const App = () => {
   // Chat state
   const [escalations, setEscalations] = useState([]);
   const [activeRoom, setActiveRoom] = useState(null);
-  const [chatHistory, setChatHistory] = useState([]);
   const [chatSummary, setChatSummary] = useState(null);
 
   // UI state
@@ -54,7 +53,6 @@ const App = () => {
         setIsConnected(data.connected);
         if (!data.connected) {
           setActiveRoom(null);
-          setChatHistory([]);
           setChatSummary(null);
         }
       });
@@ -79,11 +77,6 @@ const App = () => {
 
       socketManager.on('chat_message', (data) => {
         console.log('New message:', data);
-        
-        // Update chat history if this is for the active room
-        if (activeRoom && data.roomId === activeRoom.roomId) {
-          setChatHistory(prev => [...prev, data]);
-        }
 
         // Update escalations list with last message
         setEscalations(prev => 
@@ -104,7 +97,6 @@ const App = () => {
         // Clear active room if it was the one that closed
         if (activeRoom && data.roomId === activeRoom.roomId) {
           setActiveRoom(null);
-          setChatHistory([]);
           setChatSummary(null);
         }
 
@@ -174,8 +166,6 @@ const App = () => {
       ...escalation
     });
 
-    // Request chat history
-    socketManager.requestChatHistory(roomId);
 
     // Remove from escalations list
     setEscalations(prev => prev.filter(esc => esc.roomId !== roomId));
@@ -189,15 +179,6 @@ const App = () => {
       return;
     }
 
-    // Add message to local history immediately for better UX
-    const newMessage = {
-      message,
-      type: 'agent',
-      timestamp: new Date().toISOString(),
-      roomId
-    };
-
-    setChatHistory(prev => [...prev, newMessage]);
     
     // Send to server
     socketManager.sendMessage(roomId, message);
@@ -214,7 +195,6 @@ const App = () => {
       
       // Clear local state
       setActiveRoom(null);
-      setChatHistory([]);
       setChatSummary(null);
     }
   }, [showNotification]);
@@ -330,7 +310,6 @@ const App = () => {
               <Grid item xs={12} sx={{ flex: 1 }}>
                 <ChatWindow
                   activeRoom={activeRoom}
-                  chatHistory={chatHistory}
                   onSendMessage={handleSendMessage}
                   onCloseSession={handleCloseSession}
                   onJoinRoom={handleJoinRoom}

@@ -133,18 +133,6 @@ class SocketManager {
     });
   }
 
-  // Request chat history for a room
-  requestChatHistory(roomId) {
-    if (!this.socket || !this.connected) {
-      console.error('Socket not connected');
-      return;
-    }
-
-    this.socket.emit('get_chat_history', {
-      roomId,
-      timestamp: new Date().toISOString()
-    });
-  }
 
   // Request escalation list
   requestEscalations() {

@@ -25,8 +25,7 @@ import {
 
 const ChatWindow = ({ 
   activeRoom, 
-  chatHistory, 
-  onSendMessage, 
+  onSendMessage,
   onCloseSession, 
   onJoinRoom,
   isConnected,
@@ -41,9 +40,6 @@ const ChatWindow = ({
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
-  useEffect(() => {
-    scrollToBottom();
-  }, [chatHistory]);
 
   useEffect(() => {
     if (activeRoom && inputRef.current) {
@@ -155,7 +151,7 @@ const ChatWindow = ({
         <Box textAlign="center">
           <CircularProgress sx={{ mb: 2 }} />
           <Typography variant="body2" color="text.secondary">
-            Loading chat history...
+            Loading...
           </Typography>
         </Box>
       </Paper>
@@ -219,86 +215,22 @@ const ChatWindow = ({
         p: 1,
         backgroundColor: 'background.default'
       }}>
-        {chatHistory && chatHistory.length > 0 ? (
-          <List sx={{ p: 0 }}>
-            {chatHistory.map((msg, index) => (
-              <React.Fragment key={index}>
-                <ListItem
-                  sx={{
-                    display: 'flex',
-                    justifyContent: getMessageAlignment(msg.type),
-                    alignItems: 'flex-start',
-                    py: 1
-                  }}
-                >
-                  <Box
-                    sx={{
-                      display: 'flex',
-                      flexDirection: msg.type === 'user' ? 'row-reverse' : 'row',
-                      alignItems: 'flex-start',
-                      maxWidth: '70%',
-                      gap: 1
-                    }}
-                  >
-                    <Avatar
-                      sx={{
-                        bgcolor: getMessageColor(msg.type),
-                        width: 32,
-                        height: 32
-                      }}
-                    >
-                      {getMessageIcon(msg.type)}
-                    </Avatar>
-                    <Box>
-                      <Paper
-                        sx={{
-                          p: 1.5,
-                          backgroundColor: msg.type === 'user' ? 'primary.light' : 
-                                          msg.type === 'agent' ? 'secondary.light' : 
-                                          'grey.100',
-                          color: msg.type === 'user' ? 'primary.contrastText' : 'text.primary'
-                        }}
-                      >
-                        <Typography variant="body2" sx={{ wordBreak: 'break-word' }}>
-                          {msg.message}
-                        </Typography>
-                      </Paper>
-                      <Typography
-                        variant="caption"
-                        color="text.secondary"
-                        sx={{
-                          display: 'block',
-                          mt: 0.5,
-                          textAlign: msg.type === 'user' ? 'right' : 'left'
-                        }}
-                      >
-                        {formatTimestamp(msg.timestamp)}
-                      </Typography>
-                    </Box>
-                  </Box>
-                </ListItem>
-                {index < chatHistory.length - 1 && <Divider />}
-              </React.Fragment>
-            ))}
-          </List>
-        ) : (
-          <Box sx={{ 
-            display: 'flex', 
-            alignItems: 'center', 
-            justifyContent: 'center', 
-            height: '100%',
-            textAlign: 'center'
-          }}>
-            <Box>
-              <Typography variant="body1" color="text.secondary" gutterBottom>
-                No messages yet
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                Start the conversation by sending a message below
-              </Typography>
-            </Box>
+        <Box sx={{ 
+          display: 'flex', 
+          alignItems: 'center', 
+          justifyContent: 'center', 
+          height: '100%',
+          textAlign: 'center'
+        }}>
+          <Box>
+            <Typography variant="body1" color="text.secondary" gutterBottom>
+              {activeRoom ? 'Start the conversation by sending a message below' : 'Select a chat to begin'}
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              {activeRoom ? 'Messages will appear here in real-time' : 'No active chat session'}
+            </Typography>
           </Box>
-        )}
+        </Box>
         <div ref={messagesEndRef} />
       </Box>
 

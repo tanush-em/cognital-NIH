@@ -62,7 +62,6 @@ src/
 - `agent_leave_room` - Leave a chat room
 - `agent_message` - Send message to customer
 - `close_session` - Close the chat session
-- `get_chat_history` - Request chat history
 - `get_escalations` - Request pending escalations
 
 ### Incoming Events (Server → Agent)
@@ -172,7 +171,7 @@ The application uses Material UI's theming system with custom CSS enhancements:
 1. Check network latency to WebSocket server
 2. Monitor browser memory usage
 3. Close unused browser tabs
-4. Consider reducing chat history length
+4. Monitor system performance
 
 ## Contributing
 
