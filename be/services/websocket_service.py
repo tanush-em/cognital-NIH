@@ -72,6 +72,33 @@ class WebSocketService:
             except Exception as e:
                 logger.error(f"Error leaving room: {str(e)}")
         
+        @self.socketio.on('close_session')
+        def handle_close_session(data):
+            """Handle closing a chat session"""
+            try:
+                room_id = data.get('roomId')
+                agent_id = data.get('agentId')
+                reason = data.get('reason', 'Session closed by agent')
+                
+                if room_id:
+                    # Update session status
+                    session = ChatSession.query.filter_by(room_id=room_id).first()
+                    if session:
+                        session.status = 'closed'
+                        db.session.commit()
+                    
+                    # Emit session_closed event
+                    self.socketio.emit('session_closed', {
+                        'room_id': room_id,
+                        'agent_id': agent_id,
+                        'reason': reason,
+                        'timestamp': datetime.utcnow().isoformat()
+                    }, room=room_id)
+                    
+            except Exception as e:
+                logger.error(f"Error closing session: {str(e)}")
+                emit('error', {'message': 'Failed to close session'})
+        
         @self.socketio.on('send_message')
         def handle_send_message(data):
             """Handle incoming messages"""
@@ -99,6 +126,15 @@ class WebSocketService:
                     'timestamp': datetime.utcnow().isoformat(),
                     'session_id': session.id
                 }, room=room_id)
+                
+                # Also emit chat_message for agent dashboard compatibility
+                if user_type == 'user':
+                    self.socketio.emit('chat_message', {
+                        'role': user_type,
+                        'content': message,
+                        'timestamp': datetime.utcnow().isoformat(),
+                        'session_id': session.id
+                    }, room=room_id)
                 
                 # Handle AI response or escalation
                 if user_type == 'user' and session.status == 'active':
@@ -212,15 +248,27 @@ class WebSocketService:
     def _handle_user_message(self, session, message, room_id):
         """Handle user message - either respond with AI or escalate"""
         try:
-            # For now, skip escalation check to avoid hanging
-            # TODO: Fix escalation service database issues
-            escalation_check = {'should_escalate': False, 'reasons': []}
+            # Enable escalation service with proper error handling
+            try:
+                escalation_check = escalation_service.should_escalate(
+                    session.id, 
+                    message, 
+                    confidence=0.8,  # Default confidence
+                    message_count=1,  # This would need to be calculated from session history
+                    session_duration=0  # This would need to be calculated from session start time
+                )
+            except Exception as e:
+                logger.error(f"Error in escalation check: {str(e)}")
+                # Fallback to no escalation if service fails
+                escalation_check = {'should_escalate': False, 'reasons': []}
             
             if escalation_check['should_escalate']:
-                # Create escalation
+                # Create escalation with priority and analysis
                 escalation = escalation_service.create_escalation(
                     session.id, 
-                    '; '.join(escalation_check['reasons'])
+                    '; '.join(escalation_check.get('reasons', ['Multiple triggers detected'])),
+                    priority=escalation_check.get('priority', 'medium'),
+                    escalation_analysis=escalation_check.get('analysis', {})
                 )
                 
                 # Notify agents
@@ -236,10 +284,22 @@ class WebSocketService:
                     'session_id': session.id
                 }, room=room_id)
                 
+                # Emit escalation events for both user chatbot and agent dashboard
                 self.socketio.emit('escalation_triggered', {
                     'session_id': session.id,
                     'reasons': escalation_check['reasons']
                 }, room=room_id)
+                
+                self.socketio.emit('escalation', {
+                    'session_id': session.id,
+                    'reasons': escalation_check['reasons']
+                }, room=room_id)
+                
+                # Emit escalation_pending for agent dashboard
+                self.socketio.emit('escalation_pending', {
+                    'session_id': session.id,
+                    'reasons': escalation_check['reasons']
+                }, room='agents')
                 
             else:
                 # Generate AI response
@@ -314,8 +374,16 @@ class WebSocketService:
             # Get escalation summary
             summary = escalation_service.get_escalation_summary(session.id)
             
-            # Emit to agents room
+            # Emit escalation_alert for backward compatibility
             self.socketio.emit('escalation_alert', {
+                'session_id': session.id,
+                'room_id': session.room_id,
+                'summary': summary,
+                'reasons': escalation_info['reasons']
+            }, room='agents')
+            
+            # Emit escalation_pending for agent dashboard
+            self.socketio.emit('escalation_pending', {
                 'session_id': session.id,
                 'room_id': session.room_id,
                 'summary': summary,

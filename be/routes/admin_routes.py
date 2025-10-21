@@ -5,6 +5,8 @@ from flask import Blueprint, request, jsonify
 from services.rag_service import rag_service
 from services.pdf_processor import pdf_processor
 from models.user_models import User, Agent
+from models.chat_models import ChatSession, Escalation
+from services.escalation_service import escalation_service
 from utils.db import db
 import logging
 import os
@@ -243,6 +245,133 @@ def update_agent_availability(agent_id):
     except Exception as e:
         logger.error(f"Error updating agent availability: {str(e)}")
         db.session.rollback()
+        return jsonify({'error': 'Internal server error'}), 500
+
+@admin_bp.route('/escalations', methods=['GET'])
+def get_escalations():
+    """Get all escalations for agent dashboard"""
+    try:
+        status = request.args.get('status', 'pending')
+        limit = request.args.get('limit', 50, type=int)
+        
+        query = Escalation.query
+        if status != 'all':
+            query = query.filter_by(status=status)
+        
+        escalations = query.order_by(Escalation.created_at.desc()).limit(limit).all()
+        
+        escalation_data = []
+        for escalation in escalations:
+            session = ChatSession.query.get(escalation.session_id)
+            escalation_info = escalation.to_dict()
+            escalation_info['session'] = session.to_dict() if session else None
+            escalation_data.append(escalation_info)
+        
+        return jsonify({
+            'success': True,
+            'escalations': escalation_data,
+            'count': len(escalation_data)
+        })
+        
+    except Exception as e:
+        logger.error(f"Error getting escalations: {str(e)}")
+        return jsonify({'error': 'Internal server error'}), 500
+
+@admin_bp.route('/escalations/<int:escalation_id>/assign', methods=['POST'])
+def assign_escalation(escalation_id):
+    """Assign escalation to an agent"""
+    try:
+        data = request.get_json()
+        agent_id = data.get('agent_id')
+        
+        if not agent_id:
+            return jsonify({'error': 'agent_id is required'}), 400
+        
+        escalation = Escalation.query.get(escalation_id)
+        if not escalation:
+            return jsonify({'error': 'Escalation not found'}), 404
+        
+        # Update escalation
+        escalation.assigned_agent_id = agent_id
+        escalation.status = 'handled'
+        db.session.commit()
+        
+        # Update session
+        session = ChatSession.query.get(escalation.session_id)
+        if session:
+            session.agent_id = agent_id
+            session.status = 'escalated'
+            db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'escalation': escalation.to_dict()
+        })
+        
+    except Exception as e:
+        logger.error(f"Error assigning escalation: {str(e)}")
+        db.session.rollback()
+        return jsonify({'error': 'Internal server error'}), 500
+
+@admin_bp.route('/sessions', methods=['GET'])
+def get_sessions():
+    """Get all chat sessions for agent dashboard"""
+    try:
+        status = request.args.get('status', 'all')
+        limit = request.args.get('limit', 50, type=int)
+        
+        query = ChatSession.query
+        if status != 'all':
+            query = query.filter_by(status=status)
+        
+        sessions = query.order_by(ChatSession.created_at.desc()).limit(limit).all()
+        
+        return jsonify({
+            'success': True,
+            'sessions': [session.to_dict() for session in sessions],
+            'count': len(sessions)
+        })
+        
+    except Exception as e:
+        logger.error(f"Error getting sessions: {str(e)}")
+        return jsonify({'error': 'Internal server error'}), 500
+
+@admin_bp.route('/analytics', methods=['GET'])
+def get_analytics():
+    """Get analytics data for agent dashboard"""
+    try:
+        days = request.args.get('days', 7, type=int)
+        
+        # Get escalation analytics
+        escalation_analytics = escalation_service.get_escalation_analytics(days)
+        
+        # Get session statistics
+        from datetime import datetime, timedelta
+        start_date = datetime.now() - timedelta(days=days)
+        
+        total_sessions = ChatSession.query.filter(ChatSession.created_at >= start_date).count()
+        escalated_sessions = ChatSession.query.filter(
+            ChatSession.created_at >= start_date,
+            ChatSession.status == 'escalated'
+        ).count()
+        
+        automation_rate = ((total_sessions - escalated_sessions) / max(1, total_sessions)) * 100
+        
+        return jsonify({
+            'success': True,
+            'analytics': {
+                'escalation_analytics': escalation_analytics,
+                'session_stats': {
+                    'total_sessions': total_sessions,
+                    'escalated_sessions': escalated_sessions,
+                    'automation_rate': round(automation_rate, 2)
+                },
+                'period_days': days
+            }
+        })
+        
+    except Exception as e:
+        logger.error(f"Error getting analytics: {str(e)}")
         return jsonify({'error': 'Internal server error'}), 500
 
 @admin_bp.route('/health', methods=['GET'])

@@ -22,6 +22,7 @@ import {
 } from '@mui/icons-material';
 
 import socketManager from './socket';
+import apiService from './api';
 import ChatList from './components/ChatList';
 import ChatWindow from './components/ChatWindow';
 import ChatSummary from './components/ChatSummary';
@@ -35,6 +36,7 @@ const App = () => {
   const [escalations, setEscalations] = useState([]);
   const [activeRoom, setActiveRoom] = useState(null);
   const [chatSummary, setChatSummary] = useState(null);
+  const [analytics, setAnalytics] = useState(null);
 
   // UI state
   const [loading, setLoading] = useState(false);
@@ -114,10 +116,9 @@ const App = () => {
       });
 
       // Request initial data
-      setTimeout(() => {
-        if (socketManager.isConnected()) {
-          requestEscalations();
-        }
+      setTimeout(async () => {
+        await requestEscalations();
+        await fetchAnalytics();
       }, 1000);
     };
 
@@ -137,9 +138,40 @@ const App = () => {
     setNotification(prev => ({ ...prev, open: false }));
   };
 
-  const requestEscalations = useCallback(() => {
-    if (socketManager.isConnected()) {
-      socketManager.requestEscalations();
+  const requestEscalations = useCallback(async () => {
+    try {
+      setLoading(true);
+      const response = await apiService.getEscalations('pending', 50);
+      if (response.success) {
+        // Transform API data to match expected format
+        const transformedEscalations = response.escalations.map(escalation => ({
+          roomId: escalation.session?.room_id || `room_${escalation.session_id}`,
+          sessionId: escalation.session_id,
+          userName: escalation.session?.user_id || 'Customer',
+          status: escalation.status,
+          priority: escalation.priority,
+          reason: escalation.reason,
+          createdAt: escalation.created_at,
+          escalationId: escalation.id
+        }));
+        setEscalations(transformedEscalations);
+      }
+    } catch (error) {
+      console.error('Error fetching escalations:', error);
+      setError('Failed to fetch escalations');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const fetchAnalytics = useCallback(async () => {
+    try {
+      const response = await apiService.getAnalytics(7);
+      if (response.success) {
+        setAnalytics(response.analytics);
+      }
+    } catch (error) {
+      console.error('Error fetching analytics:', error);
     }
   }, []);
 
@@ -199,9 +231,23 @@ const App = () => {
     }
   }, [showNotification]);
 
-  const handleRefresh = useCallback(() => {
-    requestEscalations();
-  }, [requestEscalations]);
+  const handleRefresh = useCallback(async () => {
+    await requestEscalations();
+    await fetchAnalytics();
+  }, [requestEscalations, fetchAnalytics]);
+
+  const handleAssignEscalation = useCallback(async (escalationId, agentId = 'agent_001') => {
+    try {
+      const response = await apiService.assignEscalation(escalationId, agentId);
+      if (response.success) {
+        showNotification('Escalation assigned successfully', 'success');
+        await requestEscalations(); // Refresh the list
+      }
+    } catch (error) {
+      console.error('Error assigning escalation:', error);
+      showNotification('Failed to assign escalation', 'error');
+    }
+  }, [requestEscalations, showNotification]);
 
   const handleMenuOpen = (event) => {
     setAnchorEl(event.currentTarget);
@@ -301,6 +347,7 @@ const App = () => {
               <Grid item xs={12}>
                 <ChatSummary
                   summary={chatSummary}
+                  analytics={analytics}
                   loading={false}
                   error={null}
                 />

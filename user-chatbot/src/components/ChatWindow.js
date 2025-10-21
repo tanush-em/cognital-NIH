@@ -14,6 +14,7 @@ import {
 import { Send, Phone, CloudUpload } from '@mui/icons-material';
 import MessageBubble from './MessageBubble';
 import PDFUpload from './PDFUpload';
+import EscalationNotification from './EscalationNotification';
 import socketManager from '../socket';
 
 const ChatWindow = () => {
@@ -24,6 +25,8 @@ const ChatWindow = () => {
   const [escalationMessage, setEscalationMessage] = useState('');
   const [showEscalation, setShowEscalation] = useState(false);
   const [showPDFUpload, setShowPDFUpload] = useState(false);
+  const [escalationStatus, setEscalationStatus] = useState(null);
+  const [agentAssigned, setAgentAssigned] = useState(false);
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
 
@@ -74,6 +77,14 @@ const ChatWindow = () => {
           
           setMessages(prev => [...prev, newMessage]);
           setIsTyping(false);
+          
+          // Check if agent has joined
+          if (data.sender === 'agent' && !agentAssigned) {
+            setAgentAssigned(true);
+            setEscalationStatus('agent_joined');
+            setEscalationMessage('A human agent has joined the conversation');
+            setShowEscalation(true);
+          }
         }
       }
     };
@@ -90,6 +101,16 @@ const ChatWindow = () => {
     };
 
     socketManager.onTypingIndicator(typingHandler);
+    
+    // Listen for escalation events
+    const escalationHandler = (data) => {
+      console.log('Escalation event:', data);
+      setEscalationStatus('escalated');
+      setEscalationMessage('Connecting you to a human agent...');
+      setShowEscalation(true);
+    };
+    
+    socketManager.onEscalation(escalationHandler);
 
     // Add welcome message
     setMessages([{
@@ -164,6 +185,19 @@ const ChatWindow = () => {
             Telecom Support Assistant
           </Typography>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            {/* Escalation Status */}
+            {escalationStatus && (
+              <Box sx={{ 
+                backgroundColor: escalationStatus === 'agent_joined' ? '#4caf50' : '#ff9800',
+                color: 'white',
+                padding: '4px 8px',
+                borderRadius: '12px',
+                fontSize: '0.75rem'
+              }}>
+                {escalationStatus === 'agent_joined' ? 'Agent Connected' : 'Escalated'}
+              </Box>
+            )}
+            
             <Tooltip title="Upload PDF Documents">
               <IconButton 
                 onClick={() => setShowPDFUpload(true)}
@@ -188,19 +222,13 @@ const ChatWindow = () => {
         </Box>
       </Paper>
 
-      {/* Escalation Alert */}
-      <Fade in={showEscalation}>
-        <Alert
-          severity="info"
-          sx={{
-            margin: 1,
-            backgroundColor: '#e3f2fd',
-            color: '#1976d2'
-          }}
-        >
-          {escalationMessage}
-        </Alert>
-      </Fade>
+      {/* Escalation Notification */}
+      <EscalationNotification
+        isVisible={showEscalation}
+        escalationStatus={escalationStatus}
+        onClose={() => setShowEscalation(false)}
+        estimatedWaitTime={2}
+      />
 
       {/* Messages Container */}
       <Box

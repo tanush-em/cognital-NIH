@@ -7,7 +7,7 @@ class SocketManager {
     this.listeners = new Map();
   }
 
-  connect(serverUrl = 'http://localhost:3001') {
+  connect(serverUrl = 'http://localhost:5000') {
     if (this.socket && this.connected) {
       return this.socket;
     }

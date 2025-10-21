@@ -40,16 +40,24 @@ class Escalation(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     session_id = db.Column(db.Integer, db.ForeignKey('chat_sessions.id'), nullable=False)
     reason = db.Column(db.String(200), nullable=False)
+    priority = db.Column(db.String(20), default='medium')  # low, medium, high, critical
+    analysis_data = db.Column(db.JSON, nullable=True)  # Store escalation analysis
+    assigned_agent_id = db.Column(db.String(100), nullable=True)  # Agent assignment tracking
     triggered_at = db.Column(db.DateTime, default=datetime.utcnow)
     handled_at = db.Column(db.DateTime, nullable=True)
     status = db.Column(db.String(20), default='pending')  # pending, handled, resolved
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
     
     def to_dict(self):
         return {
             'id': self.id,
             'session_id': self.session_id,
             'reason': self.reason,
+            'priority': self.priority,
+            'analysis_data': self.analysis_data,
+            'assigned_agent_id': self.assigned_agent_id,
             'triggered_at': self.triggered_at.isoformat(),
             'handled_at': self.handled_at.isoformat() if self.handled_at else None,
-            'status': self.status
+            'status': self.status,
+            'created_at': self.created_at.isoformat()
         }
