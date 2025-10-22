@@ -43,6 +43,13 @@ class ApiService {
     });
   }
 
+  async assignEscalationBySession(sessionId, agentId) {
+    return this.request(`/escalations/assign-by-session`, {
+      method: 'POST',
+      body: JSON.stringify({ session_id: sessionId, agent_id: agentId }),
+    });
+  }
+
   // Session endpoints
   async getSessions(status = 'all', limit = 50) {
     return this.request(`/sessions?status=${status}&limit=${limit}`);

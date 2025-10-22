@@ -313,6 +313,32 @@ def assign_escalation(escalation_id):
         db.session.rollback()
         return jsonify({'error': 'Internal server error'}), 500
 
+@admin_bp.route('/escalations/assign-by-session', methods=['POST'])
+def assign_escalation_by_session():
+    """Assign escalation by session ID"""
+    try:
+        data = request.get_json()
+        session_id = data.get('session_id')
+        agent_id = data.get('agent_id')
+        
+        if not session_id or not agent_id:
+            return jsonify({'error': 'session_id and agent_id are required'}), 400
+        
+        # Use escalation service to assign agent
+        success = escalation_service.assign_agent(session_id, agent_id)
+        
+        if success:
+            return jsonify({
+                'success': True,
+                'message': f'Agent {agent_id} assigned to session {session_id}'
+            })
+        else:
+            return jsonify({'error': 'Failed to assign agent'}), 500
+        
+    except Exception as e:
+        logger.error(f"Error assigning escalation by session: {str(e)}")
+        return jsonify({'error': 'Internal server error'}), 500
+
 @admin_bp.route('/sessions', methods=['GET'])
 def get_sessions():
     """Get all chat sessions for agent dashboard"""

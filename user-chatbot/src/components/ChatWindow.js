@@ -108,6 +108,11 @@ const ChatWindow = () => {
       setEscalationStatus('escalated');
       setEscalationMessage('Connecting you to a human agent...');
       setShowEscalation(true);
+      
+      // Hide escalation message after 5 seconds
+      setTimeout(() => {
+        setShowEscalation(false);
+      }, 5000);
     };
     
     socketManager.onEscalation(escalationHandler);

@@ -208,7 +208,7 @@ const ChatList = ({
         {escalations && escalations.length > 0 ? (
           <List sx={{ p: 0 }}>
             {sortEscalations(escalations).map((room, index) => (
-              <React.Fragment key={room.roomId}>
+              <React.Fragment key={room.uniqueKey || room.roomId}>
                 <ListItem disablePadding>
                   <ListItemButton
                     selected={selectedRoom === room.roomId}
@@ -253,7 +253,7 @@ const ChatList = ({
                     <ListItemText
                       primary={
                         <Box display="flex" alignItems="center" gap={1}>
-                          <Typography variant="subtitle1" noWrap>
+                          <Typography variant="subtitle1" noWrap component="span">
                             {room.userName || 'Customer'}
                           </Typography>
                           <Chip
@@ -267,11 +267,11 @@ const ChatList = ({
                       }
                       secondary={
                         <Box>
-                          <Typography variant="body2" color="text.secondary" noWrap>
+                          <Typography variant="body2" color="text.secondary" noWrap component="div">
                             Room: {room.roomId}
                           </Typography>
                           <Box display="flex" alignItems="center" gap={1} mt={0.5}>
-                            <Typography variant="caption" color="text.secondary">
+                            <Typography variant="caption" color="text.secondary" component="span">
                               {formatTimeAgo(room.escalatedAt || room.createdAt)}
                             </Typography>
                             {room.priority && (
@@ -287,6 +287,7 @@ const ChatList = ({
                             <Typography 
                               variant="caption" 
                               color="text.secondary"
+                              component="div"
                               sx={{ 
                                 display: 'block',
                                 mt: 0.5,

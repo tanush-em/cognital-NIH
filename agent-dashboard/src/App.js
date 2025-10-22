@@ -72,7 +72,12 @@ const App = () => {
           if (existing) {
             return prev.map(e => e.roomId === data.roomId ? { ...e, ...data } : e);
           }
-          return [...prev, data];
+          // Ensure unique key for new escalations
+          const escalationWithKey = {
+            ...data,
+            uniqueKey: data.uniqueKey || `escalation_${data.escalationId || Date.now()}`
+          };
+          return [...prev, escalationWithKey];
         });
         showNotification(`New escalation from ${data.userName || 'Customer'}`, 'info');
       });
@@ -152,7 +157,9 @@ const App = () => {
           priority: escalation.priority,
           reason: escalation.reason,
           createdAt: escalation.created_at,
-          escalationId: escalation.id
+          escalationId: escalation.id,
+          // Use escalation ID as unique key to prevent React duplicate key warnings
+          uniqueKey: `escalation_${escalation.id}`
         }));
         setEscalations(transformedEscalations);
       }
@@ -198,11 +205,11 @@ const App = () => {
       ...escalation
     });
 
-
     // Remove from escalations list
     setEscalations(prev => prev.filter(esc => esc.roomId !== roomId));
 
     setLoading(false);
+    showNotification(`Joined room ${roomId}`, 'success');
   }, [escalations, showNotification]);
 
   const handleSendMessage = useCallback((roomId, message) => {

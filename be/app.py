@@ -38,7 +38,13 @@ def create_app():
         app, 
         cors_allowed_origins="*",
         logger=True,
-        engineio_logger=True
+        engineio_logger=True,
+        transports=['polling', 'websocket'],
+        allow_upgrades=True,
+        ping_timeout=60,
+        ping_interval=25,
+        max_http_buffer_size=1000000,
+        compression_threshold=1024
     )
     
     # Initialize WebSocket service

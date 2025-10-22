@@ -81,10 +81,17 @@ class EscalationService:
             # Calculate priority based on escalation reasons
             priority = self._calculate_escalation_priority(escalation_analysis)
             
+            # Collect all reasons for escalation
+            all_reasons = []
+            for category, data in escalation_analysis.items():
+                if data.get('should_escalate') and data.get('reasons'):
+                    all_reasons.extend(data['reasons'])
+            
             return {
                 'should_escalate': should_escalate,
                 'priority': priority,
                 'analysis': escalation_analysis,
+                'reasons': all_reasons,
                 'confidence': confidence,
                 'message_count': message_count,
                 'session_duration': session_duration
@@ -285,16 +292,21 @@ class EscalationService:
         try:
             session = ChatSession.query.get(session_id)
             if not session:
+                logger.error(f"Session {session_id} not found")
                 return False
             
+            # Update session with agent assignment
             session.agent_id = agent_id
             session.status = 'escalated'
             
             # Update escalation status
             escalation = Escalation.query.filter_by(session_id=session_id, status='pending').first()
             if escalation:
+                escalation.assigned_agent_id = agent_id
                 escalation.status = 'handled'
-                escalation.handled_at = db.func.now()
+                escalation.handled_at = datetime.utcnow()
+            else:
+                logger.warning(f"No pending escalation found for session {session_id}")
             
             db.session.commit()
             logger.info(f"Assigned agent {agent_id} to session {session_id}")

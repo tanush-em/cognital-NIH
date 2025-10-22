@@ -13,8 +13,16 @@ class SocketManager {
     }
 
     this.socket = io(serverUrl, {
-      transports: ['websocket'],
+      transports: ['polling', 'websocket'],
       autoConnect: true,
+      upgrade: true,
+      rememberUpgrade: true,
+      reconnection: true,
+      reconnectionAttempts: 5,
+      reconnectionDelay: 1000,
+      timeout: 20000,
+      forceNew: true,
+      multiplex: false
     });
 
     // Connection event handlers
@@ -22,6 +30,13 @@ class SocketManager {
       console.log('Connected to server:', this.socket.id);
       this.connected = true;
       this.emit('connection_status', { connected: true });
+      
+      // Join agents room to receive escalation notifications
+      this.socket.emit('join_room', {
+        room_id: 'agents',
+        user_type: 'agent',
+        user_id: 'agent_001'
+      });
     });
 
     this.socket.on('disconnect', () => {
@@ -32,7 +47,25 @@ class SocketManager {
 
     this.socket.on('connect_error', (error) => {
       console.error('Connection error:', error);
+      this.connected = false;
       this.emit('connection_error', error);
+    });
+
+    this.socket.on('reconnect', (attemptNumber) => {
+      console.log('Reconnected after', attemptNumber, 'attempts');
+      this.connected = true;
+      this.emit('connection_status', { connected: true });
+    });
+
+    this.socket.on('reconnect_error', (error) => {
+      console.error('Reconnection error:', error);
+      this.emit('connection_error', error);
+    });
+
+    this.socket.on('reconnect_failed', () => {
+      console.error('Failed to reconnect after maximum attempts');
+      this.connected = false;
+      this.emit('connection_error', { message: 'Failed to reconnect to server' });
     });
 
     // Chat-specific event handlers
@@ -84,6 +117,8 @@ class SocketManager {
       agentId,
       timestamp: new Date().toISOString()
     });
+    
+    console.log(`Agent ${agentId} joining room ${roomId}`);
   }
 
   // Leave a chat room

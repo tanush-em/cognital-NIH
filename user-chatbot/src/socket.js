@@ -120,7 +120,13 @@ class SocketManager {
 
   onEscalation(callback) {
     if (this.socket) {
+      // Remove existing listeners to prevent duplicates
+      this.socket.off('escalation');
+      this.socket.off('escalation_triggered');
+      
+      // Handle escalation events
       this.socket.on('escalation', callback);
+      this.socket.on('escalation_triggered', callback);
     }
   }
 
@@ -138,6 +144,7 @@ class SocketManager {
       this.socket.off('ai_response');
       this.socket.off('agent_response');
       this.socket.off('escalation');
+      this.socket.off('escalation_triggered');
       this.socket.off('ai_typing');
       this.socket.off('typing');
       this.socket.off('connected');

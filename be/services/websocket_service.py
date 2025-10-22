@@ -1,6 +1,7 @@
 """
 WebSocket service for real-time chat functionality
 """
+from flask import request
 from flask_socketio import emit, join_room, leave_room
 from models.chat_models import ChatSession
 from services.rag_service import rag_service
@@ -20,14 +21,22 @@ class WebSocketService:
     def setup_handlers(self):
         """Setup Socket.IO event handlers"""
         
+        # Setup agent handlers
+        self._setup_agent_handlers()
+        
         @self.socketio.on('connect')
         def handle_connect():
-            logger.info('Client connected')
+            logger.info(f'Client connected: {request.sid}')
             emit('connected', {'message': 'Connected to chat server'})
         
         @self.socketio.on('disconnect')
         def handle_disconnect():
-            logger.info('Client disconnected')
+            logger.info(f'Client disconnected: {request.sid}')
+        
+        @self.socketio.on('error')
+        def handle_error(error):
+            logger.error(f'Socket error: {error}')
+            emit('error', {'message': 'Server error occurred'})
         
         @self.socketio.on('join_room')
         def handle_join_room(data):
@@ -43,6 +52,12 @@ class WebSocketService:
                 
                 # Join the room
                 join_room(room_id)
+                
+                # Special handling for agents room
+                if room_id == 'agents' and user_type == 'agent':
+                    # Send existing pending escalations to the agent
+                    self._send_existing_escalations()
+                    return
                 
                 # Get or create session
                 session = self._get_or_create_session(room_id, user_id, user_type)
@@ -287,19 +302,34 @@ class WebSocketService:
                 # Emit escalation events for both user chatbot and agent dashboard
                 self.socketio.emit('escalation_triggered', {
                     'session_id': session.id,
-                    'reasons': escalation_check['reasons']
+                    'reasons': escalation_check.get('reasons', ['Multiple triggers detected'])
                 }, room=room_id)
                 
                 self.socketio.emit('escalation', {
                     'session_id': session.id,
-                    'reasons': escalation_check['reasons']
+                    'reasons': escalation_check.get('reasons', ['Multiple triggers detected'])
                 }, room=room_id)
                 
                 # Emit escalation_pending for agent dashboard
                 self.socketio.emit('escalation_pending', {
-                    'session_id': session.id,
-                    'reasons': escalation_check['reasons']
+                    'roomId': session.room_id,
+                    'sessionId': session.id,
+                    'userName': session.user_id,
+                    'status': 'pending',
+                    'priority': escalation_check.get('priority', 'medium'),
+                    'reason': '; '.join(escalation_check.get('reasons', ['Multiple triggers detected'])),
+                    'createdAt': datetime.utcnow().isoformat(),
+                    'escalationId': escalation.id,
+                    'uniqueKey': f'escalation_{escalation.id}'
                 }, room='agents')
+                
+                # Also emit to the specific room for user notification
+                self.socketio.emit('escalation_triggered', {
+                    'session_id': session.id,
+                    'room_id': session.room_id,
+                    'reasons': escalation_check.get('reasons', ['Multiple triggers detected']),
+                    'priority': escalation_check.get('priority', 'medium')
+                }, room=room_id)
                 
             else:
                 # Generate AI response
@@ -374,12 +404,24 @@ class WebSocketService:
             # Get escalation summary
             summary = escalation_service.get_escalation_summary(session.id)
             
+            # Extract reasons from escalation analysis
+            reasons = []
+            if 'analysis' in escalation_info:
+                analysis = escalation_info['analysis']
+                for category, data in analysis.items():
+                    if isinstance(data, dict) and 'reasons' in data:
+                        reasons.extend(data['reasons'])
+            
+            # Fallback to basic reason if no detailed reasons found
+            if not reasons and 'reason' in escalation_info:
+                reasons = [escalation_info['reason']]
+            
             # Emit escalation_alert for backward compatibility
             self.socketio.emit('escalation_alert', {
                 'session_id': session.id,
                 'room_id': session.room_id,
                 'summary': summary,
-                'reasons': escalation_info['reasons']
+                'reasons': reasons
             }, room='agents')
             
             # Emit escalation_pending for agent dashboard
@@ -387,7 +429,7 @@ class WebSocketService:
                 'session_id': session.id,
                 'room_id': session.room_id,
                 'summary': summary,
-                'reasons': escalation_info['reasons']
+                'reasons': reasons
             }, room='agents')
             
         except Exception as e:
@@ -401,3 +443,155 @@ class WebSocketService:
         except Exception as e:
             logger.error(f"Error joining agents room: {str(e)}")
             return False
+    
+    def _send_existing_escalations(self):
+        """Send existing pending escalations to connected agents"""
+        try:
+            from models.chat_models import Escalation
+            from routes.admin_routes import get_escalations
+            
+            # Get pending escalations
+            escalations = Escalation.query.filter_by(status='pending').order_by(Escalation.created_at.desc()).limit(50).all()
+            
+            for escalation in escalations:
+                session = ChatSession.query.get(escalation.session_id)
+                if session:
+                    emit('escalation_pending', {
+                        'roomId': session.room_id,
+                        'sessionId': session.id,
+                        'userName': session.user_id,
+                        'status': escalation.status,
+                        'priority': escalation.priority,
+                        'reason': escalation.reason,
+                        'createdAt': escalation.created_at.isoformat(),
+                        'escalationId': escalation.id,
+                        'uniqueKey': f'escalation_{escalation.id}'
+                    })
+            
+            logger.info(f"Sent {len(escalations)} existing escalations to agent")
+            
+        except Exception as e:
+            logger.error(f"Error sending existing escalations: {str(e)}")
+    
+    def _setup_agent_handlers(self):
+        """Setup agent-specific WebSocket handlers"""
+        from flask_socketio import emit, join_room, leave_room
+        from models.chat_models import ChatSession
+        from utils.db import db
+        from datetime import datetime
+        import logging
+        
+        logger = logging.getLogger(__name__)
+        
+        @self.socketio.on('agent_join_room')
+        def handle_agent_join_room(data):
+            """Handle agent joining a chat room"""
+            try:
+                room_id = data.get('roomId')
+                agent_id = data.get('agentId', 'agent_001')
+                
+                if not room_id:
+                    emit('error', {'message': 'Missing room ID'})
+                    return
+                
+                # Join the room
+                join_room(room_id)
+                
+                # Join agents room for notifications
+                self.join_agents_room(agent_id)
+                
+                # Update session with agent
+                session = ChatSession.query.filter_by(room_id=room_id).first()
+                if session:
+                    session.agent_id = agent_id
+                    session.status = 'escalated'
+                    db.session.commit()
+                    
+                    # Assign agent to escalation
+                    escalation_service.assign_agent(session.id, agent_id)
+                
+                # Notify user that agent joined
+                self.socketio.emit('agent_joined', {
+                    'roomId': room_id,
+                    'agentId': agent_id,
+                    'timestamp': datetime.utcnow().isoformat()
+                }, room=room_id)
+                
+                # Send a message to the user that agent has joined
+                self.socketio.emit('new_message', {
+                    'role': 'system',
+                    'content': f'Agent {agent_id} has joined the conversation and will assist you shortly.',
+                    'timestamp': datetime.utcnow().isoformat(),
+                    'session_id': session.id if session else None
+                }, room=room_id)
+                
+                logger.info(f"Agent {agent_id} joined room {room_id}")
+                
+            except Exception as e:
+                logger.error(f"Error handling agent join room: {str(e)}")
+                emit('error', {'message': 'Error joining room'})
+        
+        @self.socketio.on('agent_leave_room')
+        def handle_agent_leave_room(data):
+            """Handle agent leaving a chat room"""
+            try:
+                room_id = data.get('roomId')
+                agent_id = data.get('agentId', 'agent_001')
+                
+                if not room_id:
+                    emit('error', {'message': 'Missing room ID'})
+                    return
+                
+                # Leave the room
+                leave_room(room_id)
+                
+                # Notify user that agent left
+                emit('agent_left', {
+                    'roomId': room_id,
+                    'agentId': agent_id,
+                    'timestamp': datetime.utcnow().isoformat()
+                }, room=room_id)
+                
+                logger.info(f"Agent {agent_id} left room {room_id}")
+                
+            except Exception as e:
+                logger.error(f"Error handling agent leave room: {str(e)}")
+                emit('error', {'message': 'Error leaving room'})
+        
+        @self.socketio.on('agent_message')
+        def handle_agent_message(data):
+            """Handle agent messages"""
+            try:
+                room_id = data.get('roomId')
+                message = data.get('message')
+                agent_id = data.get('agentId', 'agent_001')
+                
+                if not room_id or not message:
+                    emit('error', {'message': 'Missing room ID or message'})
+                    return
+                
+                # Send message to user
+                emit('new_message', {
+                    'role': 'agent',
+                    'content': message,
+                    'timestamp': datetime.utcnow().isoformat(),
+                    'agent_id': agent_id
+                }, room=room_id)
+                
+                logger.info(f"Agent {agent_id} sent message in room {room_id}")
+                
+            except Exception as e:
+                logger.error(f"Error handling agent message: {str(e)}")
+                emit('error', {'message': 'Error sending message'})
+        
+        @self.socketio.on('get_escalations')
+        def handle_get_escalations():
+            """Handle request for escalations list"""
+            try:
+                # This will be handled by the API endpoint
+                # Just acknowledge the request
+                emit('escalations_requested', {'status': 'success'})
+                
+            except Exception as e:
+                logger.error(f"Error handling get escalations: {str(e)}")
+                emit('error', {'message': 'Error getting escalations'})
