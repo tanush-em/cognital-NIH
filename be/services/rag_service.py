@@ -34,6 +34,16 @@ class RAGService:
     def _auto_load_pdfs(self):
         """Automatically load PDFs from resources folder on startup"""
         try:
+            # Check if collection already has documents
+            try:
+                existing_docs = self.collection.get()
+                if existing_docs and existing_docs['ids'] and len(existing_docs['ids']) > 0:
+                    logger.info(f"Collection already has {len(existing_docs['ids'])} documents, skipping auto-load")
+                    return
+            except Exception:
+                # Collection might be empty, continue with loading
+                pass
+            
             # Get documents from PDF processor
             pdf_documents = pdf_processor.get_documents_for_rag()
             
@@ -67,26 +77,47 @@ class RAGService:
     def add_documents(self, documents: List[Dict[str, Any]]) -> bool:
         """Add documents to the knowledge base"""
         try:
+            # Get existing document IDs to avoid duplicates
+            existing_ids = set()
+            try:
+                existing_docs = self.collection.get()
+                if existing_docs and existing_docs['ids']:
+                    existing_ids = set(existing_docs['ids'])
+            except Exception:
+                # Collection might be empty, that's okay
+                pass
+            
             texts = []
             metadatas = []
             ids = []
             
             for i, doc in enumerate(documents):
+                doc_id = f"doc_{i}"
+                
+                # Skip if document already exists
+                if doc_id in existing_ids:
+                    logger.warning(f"Document {doc_id} already exists, skipping")
+                    continue
+                
                 texts.append(doc['content'])
                 metadatas.append({
                     'title': doc.get('title', ''),
                     'category': doc.get('category', ''),
                     'source': doc.get('source', '')
                 })
-                ids.append(f"doc_{i}")
+                ids.append(doc_id)
             
-            self.collection.add(
-                documents=texts,
-                metadatas=metadatas,
-                ids=ids
-            )
+            # Only add if we have new documents
+            if texts:
+                self.collection.add(
+                    documents=texts,
+                    metadatas=metadatas,
+                    ids=ids
+                )
+                logger.info(f"Added {len(texts)} new documents to knowledge base")
+            else:
+                logger.info("No new documents to add (all already exist)")
             
-            logger.info(f"Added {len(documents)} documents to knowledge base")
             return True
             
         except Exception as e:

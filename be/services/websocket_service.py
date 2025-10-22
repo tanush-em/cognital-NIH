@@ -152,7 +152,7 @@ class WebSocketService:
                     }, room=room_id)
                 
                 # Handle AI response or escalation
-                if user_type == 'user' and session.status == 'active':
+                if user_type == 'user' and session.status == 'active' and not session.agent_id:
                     self._handle_user_message(session, message, room_id)
                 elif user_type == 'agent':
                     self._handle_agent_message(session, message, room_id)
@@ -490,42 +490,54 @@ class WebSocketService:
                 room_id = data.get('roomId')
                 agent_id = data.get('agentId', 'agent_001')
                 
+                logger.info(f"Agent {agent_id} attempting to join room {room_id}")
+                
                 if not room_id:
                     emit('error', {'message': 'Missing room ID'})
                     return
                 
                 # Join the room
                 join_room(room_id)
-                
-                # Join agents room for notifications
-                self.join_agents_room(agent_id)
+                logger.info(f"Agent {agent_id} successfully joined room {room_id}")
                 
                 # Update session with agent
                 session = ChatSession.query.filter_by(room_id=room_id).first()
                 if session:
-                    session.agent_id = agent_id
-                    session.status = 'escalated'
-                    db.session.commit()
+                    try:
+                        session.agent_id = agent_id
+                        session.status = 'escalated'
+                        db.session.commit()
+                        
+                        # Assign agent to escalation
+                        escalation_service.assign_agent(session.id, agent_id)
+                        logger.info(f"Successfully assigned agent {agent_id} to session {session.id}")
+                    except Exception as e:
+                        logger.error(f"Error updating session {session.id}: {str(e)}")
+                        db.session.rollback()
+                        # Don't return here, continue with notifications
+                else:
+                    logger.warning(f"No session found for room {room_id}")
+                
+                # Always send notifications, even if session update failed
+                try:
+                    # Notify user that agent joined
+                    self.socketio.emit('agent_joined', {
+                        'roomId': room_id,
+                        'agentId': agent_id,
+                        'timestamp': datetime.utcnow().isoformat()
+                    }, room=room_id)
                     
-                    # Assign agent to escalation
-                    escalation_service.assign_agent(session.id, agent_id)
-                
-                # Notify user that agent joined
-                self.socketio.emit('agent_joined', {
-                    'roomId': room_id,
-                    'agentId': agent_id,
-                    'timestamp': datetime.utcnow().isoformat()
-                }, room=room_id)
-                
-                # Send a message to the user that agent has joined
-                self.socketio.emit('new_message', {
-                    'role': 'system',
-                    'content': f'Agent {agent_id} has joined the conversation and will assist you shortly.',
-                    'timestamp': datetime.utcnow().isoformat(),
-                    'session_id': session.id if session else None
-                }, room=room_id)
-                
-                logger.info(f"Agent {agent_id} joined room {room_id}")
+                    # Send a message to the user that agent has joined
+                    self.socketio.emit('new_message', {
+                        'role': 'system',
+                        'content': f'Agent {agent_id} has joined the conversation and will assist you shortly.',
+                        'timestamp': datetime.utcnow().isoformat(),
+                        'session_id': session.id if session else None
+                    }, room=room_id)
+                    
+                    logger.info(f"Agent {agent_id} joined room {room_id}")
+                except Exception as e:
+                    logger.error(f"Error sending notifications: {str(e)}")
                 
             except Exception as e:
                 logger.error(f"Error handling agent join room: {str(e)}")

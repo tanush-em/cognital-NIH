@@ -55,10 +55,6 @@ class ApiService {
     return this.request(`/sessions?status=${status}&limit=${limit}`);
   }
 
-  // Analytics endpoints
-  async getAnalytics(days = 7) {
-    return this.request(`/analytics?days=${days}`);
-  }
 
   // Agent endpoints
   async getAgents() {

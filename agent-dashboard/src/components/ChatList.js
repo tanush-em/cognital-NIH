@@ -250,57 +250,56 @@ const ChatList = ({
                       </Badge>
                     </ListItemAvatar>
                     
-                    <ListItemText
-                      primary={
-                        <Box display="flex" alignItems="center" gap={1}>
-                          <Typography variant="subtitle1" noWrap component="span">
-                            {room.userName || 'Customer'}
-                          </Typography>
+                    <Box sx={{ flex: 1, minWidth: 0 }}>
+                      {/* Primary content */}
+                      <Box display="flex" alignItems="center" gap={1} mb={0.5}>
+                        <Typography variant="subtitle1" noWrap sx={{ flex: 1 }}>
+                          {room.userName || 'Customer'}
+                        </Typography>
+                        <Chip
+                          icon={getStatusIcon(room.status)}
+                          label={room.status || 'Unknown'}
+                          size="small"
+                          color={getStatusColor(room.status)}
+                          variant="outlined"
+                        />
+                      </Box>
+                      
+                      {/* Secondary content */}
+                      <Typography variant="body2" color="text.secondary" noWrap>
+                        Room: {room.roomId}
+                      </Typography>
+                      
+                      <Box display="flex" alignItems="center" gap={1} mt={0.5}>
+                        <Typography variant="caption" color="text.secondary">
+                          {formatTimeAgo(room.escalatedAt || room.createdAt)}
+                        </Typography>
+                        {room.priority && (
                           <Chip
-                            icon={getStatusIcon(room.status)}
-                            label={room.status || 'Unknown'}
+                            label={room.priority}
                             size="small"
-                            color={getStatusColor(room.status)}
+                            color={getPriorityColor(room.priority)}
                             variant="outlined"
                           />
-                        </Box>
-                      }
-                      secondary={
-                        <Box>
-                          <Typography variant="body2" color="text.secondary" noWrap>
-                            Room: {room.roomId}
-                          </Typography>
-                          <Box display="flex" alignItems="center" gap={1} mt={0.5}>
-                            <Typography variant="caption" color="text.secondary">
-                              {formatTimeAgo(room.escalatedAt || room.createdAt)}
-                            </Typography>
-                            {room.priority && (
-                              <Chip
-                                label={room.priority}
-                                size="small"
-                                color={getPriorityColor(room.priority)}
-                                variant="outlined"
-                              />
-                            )}
-                          </Box>
-                          {room.lastMessage && (
-                            <Typography 
-                              variant="caption" 
-                              color="text.secondary"
-                              sx={{ 
-                                display: 'block',
-                                mt: 0.5,
-                                overflow: 'hidden',
-                                textOverflow: 'ellipsis',
-                                whiteSpace: 'nowrap'
-                              }}
-                            >
-                              {room.lastMessage}
-                            </Typography>
-                          )}
-                        </Box>
-                      }
-                    />
+                        )}
+                      </Box>
+                      
+                      {room.lastMessage && (
+                        <Typography 
+                          variant="caption" 
+                          color="text.secondary"
+                          sx={{ 
+                            display: 'block',
+                            mt: 0.5,
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap'
+                          }}
+                        >
+                          {room.lastMessage}
+                        </Typography>
+                      )}
+                    </Box>
                   </ListItemButton>
                 </ListItem>
                 {index < escalations.length - 1 && <Divider />}

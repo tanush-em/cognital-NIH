@@ -25,6 +25,7 @@ import {
 
 const ChatWindow = ({ 
   activeRoom, 
+  messages = [],
   onSendMessage,
   onCloseSession, 
   onJoinRoom,
@@ -40,12 +41,16 @@ const ChatWindow = ({
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
-
   useEffect(() => {
     if (activeRoom && inputRef.current) {
       inputRef.current.focus();
     }
   }, [activeRoom]);
+
+  // Scroll to bottom when messages change
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
 
   const handleSendMessage = () => {
     if (message.trim() && activeRoom && isConnected) {
@@ -215,43 +220,91 @@ const ChatWindow = ({
         p: 1,
         backgroundColor: 'background.default'
       }}>
-        <Box sx={{ 
-          display: 'flex', 
-          alignItems: 'center', 
-          justifyContent: 'center', 
-          height: '100%',
-          textAlign: 'center',
-          p: 2
-        }}>
-          <Box>
-            <Typography variant="body1" color="text.secondary" gutterBottom>
-              {activeRoom ? 'You are now connected to the customer' : 'Select a chat to begin'}
-            </Typography>
-            <Typography variant="body2" color="text.secondary" gutterBottom>
-              {activeRoom ? 'Start the conversation by sending a message below' : 'No active chat session'}
-            </Typography>
-            {activeRoom && (
-              <Box sx={{ mt: 2, p: 2, bgcolor: 'primary.light', borderRadius: 1 }}>
-                <Typography variant="caption" color="primary.contrastText">
-                  Customer: {activeRoom.userName || 'Unknown'}
-                </Typography>
-                <br />
-                <Typography variant="caption" color="primary.contrastText">
-                  Room: {activeRoom.roomId}
-                </Typography>
-                {activeRoom.reason && (
-                  <>
-                    <br />
-                    <Typography variant="caption" color="primary.contrastText">
-                      Reason: {activeRoom.reason}
+        {messages.length > 0 ? (
+          <List sx={{ p: 0 }}>
+            {messages.map((msg, index) => (
+              <ListItem key={index} sx={{ 
+                display: 'flex', 
+                justifyContent: getMessageAlignment(msg.role),
+                mb: 1,
+                px: 0
+              }}>
+                <Box sx={{
+                  maxWidth: '70%',
+                  display: 'flex',
+                  alignItems: 'flex-start',
+                  gap: 1,
+                  flexDirection: msg.role === 'agent' ? 'row-reverse' : 'row'
+                }}>
+                  <Avatar sx={{ 
+                    bgcolor: getMessageColor(msg.role),
+                    width: 32,
+                    height: 32
+                  }}>
+                    {getMessageIcon(msg.role)}
+                  </Avatar>
+                  <Box sx={{
+                    bgcolor: msg.role === 'agent' ? 'primary.main' : 'grey.200',
+                    color: msg.role === 'agent' ? 'primary.contrastText' : 'text.primary',
+                    p: 1.5,
+                    borderRadius: 2,
+                    wordBreak: 'break-word'
+                  }}>
+                    <Typography variant="body2">
+                      {msg.content}
                     </Typography>
-                  </>
-                )}
-              </Box>
-            )}
+                    <Typography variant="caption" sx={{ 
+                      display: 'block', 
+                      mt: 0.5, 
+                      opacity: 0.7,
+                      fontSize: '0.7rem'
+                    }}>
+                      {formatTimestamp(msg.timestamp)}
+                    </Typography>
+                  </Box>
+                </Box>
+              </ListItem>
+            ))}
+            <div ref={messagesEndRef} />
+          </List>
+        ) : (
+          <Box sx={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            justifyContent: 'center', 
+            height: '100%',
+            textAlign: 'center',
+            p: 2
+          }}>
+            <Box>
+              <Typography variant="body1" color="text.secondary" gutterBottom>
+                {activeRoom ? 'You are now connected to the customer' : 'Select a chat to begin'}
+              </Typography>
+              <Typography variant="body2" color="text.secondary" gutterBottom>
+                {activeRoom ? 'Start the conversation by sending a message below' : 'No active chat session'}
+              </Typography>
+              {activeRoom && (
+                <Box sx={{ mt: 2, p: 2, bgcolor: 'primary.light', borderRadius: 1 }}>
+                  <Typography variant="caption" color="primary.contrastText">
+                    Customer: {activeRoom.userName || 'Unknown'}
+                  </Typography>
+                  <br />
+                  <Typography variant="caption" color="primary.contrastText">
+                    Room: {activeRoom.roomId}
+                  </Typography>
+                  {activeRoom.reason && (
+                    <>
+                      <br />
+                      <Typography variant="caption" color="primary.contrastText">
+                        Reason: {activeRoom.reason}
+                      </Typography>
+                    </>
+                  )}
+                </Box>
+              )}
+            </Box>
           </Box>
-        </Box>
-        <div ref={messagesEndRef} />
+        )}
       </Box>
 
       {/* Message Input */}

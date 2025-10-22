@@ -362,43 +362,6 @@ def get_sessions():
         logger.error(f"Error getting sessions: {str(e)}")
         return jsonify({'error': 'Internal server error'}), 500
 
-@admin_bp.route('/analytics', methods=['GET'])
-def get_analytics():
-    """Get analytics data for agent dashboard"""
-    try:
-        days = request.args.get('days', 7, type=int)
-        
-        # Get escalation analytics
-        escalation_analytics = escalation_service.get_escalation_analytics(days)
-        
-        # Get session statistics
-        from datetime import datetime, timedelta
-        start_date = datetime.now() - timedelta(days=days)
-        
-        total_sessions = ChatSession.query.filter(ChatSession.created_at >= start_date).count()
-        escalated_sessions = ChatSession.query.filter(
-            ChatSession.created_at >= start_date,
-            ChatSession.status == 'escalated'
-        ).count()
-        
-        automation_rate = ((total_sessions - escalated_sessions) / max(1, total_sessions)) * 100
-        
-        return jsonify({
-            'success': True,
-            'analytics': {
-                'escalation_analytics': escalation_analytics,
-                'session_stats': {
-                    'total_sessions': total_sessions,
-                    'escalated_sessions': escalated_sessions,
-                    'automation_rate': round(automation_rate, 2)
-                },
-                'period_days': days
-            }
-        })
-        
-    except Exception as e:
-        logger.error(f"Error getting analytics: {str(e)}")
-        return jsonify({'error': 'Internal server error'}), 500
 
 @admin_bp.route('/health', methods=['GET'])
 def health_check():

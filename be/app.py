@@ -2,6 +2,17 @@
 Main Flask application for AI-powered telecom support chatbot
 """
 import os
+# Fix huggingface tokenizers fork warning
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
+# Disable telemetry and error reporting to fix capture() warnings
+os.environ["LANGCHAIN_TRACING_V2"] = "false"
+os.environ["LANGCHAIN_ENDPOINT"] = ""
+os.environ["LANGCHAIN_API_KEY"] = ""
+os.environ["LANGCHAIN_PROJECT"] = ""
+# Disable other telemetry
+os.environ["HF_HUB_DISABLE_TELEMETRY"] = "1"
+os.environ["DISABLE_TELEMETRY"] = "1"
+
 from flask import Flask
 from flask_socketio import SocketIO
 from flask_cors import CORS

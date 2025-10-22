@@ -36,7 +36,7 @@ const App = () => {
   const [escalations, setEscalations] = useState([]);
   const [activeRoom, setActiveRoom] = useState(null);
   const [chatSummary, setChatSummary] = useState(null);
-  const [analytics, setAnalytics] = useState(null);
+  const [messages, setMessages] = useState([]);
 
   // UI state
   const [loading, setLoading] = useState(false);
@@ -67,9 +67,13 @@ const App = () => {
       // Chat event listeners
       socketManager.on('escalation_pending', (data) => {
         console.log('New escalation:', data);
+        console.log('Current escalations before update:', escalations);
+        
         setEscalations(prev => {
+          console.log('Previous escalations state:', prev);
           const existing = prev.find(e => e.roomId === data.roomId);
           if (existing) {
+            console.log('Updating existing escalation');
             return prev.map(e => e.roomId === data.roomId ? { ...e, ...data } : e);
           }
           // Ensure unique key for new escalations
@@ -77,6 +81,7 @@ const App = () => {
             ...data,
             uniqueKey: data.uniqueKey || `escalation_${data.escalationId || Date.now()}`
           };
+          console.log('Adding new escalation:', escalationWithKey);
           return [...prev, escalationWithKey];
         });
         showNotification(`New escalation from ${data.userName || 'Customer'}`, 'info');
@@ -98,10 +103,14 @@ const App = () => {
       socketManager.on('new_message', (data) => {
         console.log('New message received:', data);
         
-        // If this message is for the active room, we could store it
-        // For now, we'll just log it since the ChatWindow doesn't have message history
-        if (activeRoom && data.session_id) {
-          console.log('Message for active room:', data);
+        // Add message to messages array if it's for the active room
+        if (activeRoom && (data.session_id || data.role === 'agent')) {
+          setMessages(prev => [...prev, {
+            role: data.role,
+            content: data.content,
+            timestamp: data.timestamp,
+            session_id: data.session_id
+          }]);
         }
       });
 
@@ -143,7 +152,7 @@ const App = () => {
     return () => {
       socketManager.disconnect();
     };
-  }, [activeRoom]);
+  }, []);
 
   const showNotification = useCallback((message, severity = 'info') => {
     setNotification({ open: true, message, severity });
@@ -219,6 +228,9 @@ const App = () => {
       ...escalation
     });
 
+    // Clear messages for new room
+    setMessages([]);
+
     // Remove from escalations list
     setEscalations(prev => prev.filter(esc => esc.roomId !== roomId));
 
@@ -232,10 +244,17 @@ const App = () => {
       return;
     }
 
+    // Add agent message to messages array immediately
+    setMessages(prev => [...prev, {
+      role: 'agent',
+      content: message,
+      timestamp: new Date().toISOString(),
+      session_id: activeRoom?.sessionId
+    }]);
     
     // Send to server
     socketManager.sendMessage(roomId, message);
-  }, [showNotification]);
+  }, [showNotification, activeRoom]);
 
   const handleCloseSession = useCallback((roomId) => {
     if (!socketManager.isConnected()) {
@@ -378,6 +397,7 @@ const App = () => {
               <Grid item xs={12} sx={{ flex: 1 }}>
                 <ChatWindow
                   activeRoom={activeRoom}
+                  messages={messages}
                   onSendMessage={handleSendMessage}
                   onCloseSession={handleCloseSession}
                   onJoinRoom={handleJoinRoom}

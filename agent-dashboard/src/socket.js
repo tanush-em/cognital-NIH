@@ -115,13 +115,31 @@ class SocketManager {
       return;
     }
 
-    this.socket.emit('agent_join_room', {
-      roomId,
-      agentId,
-      timestamp: new Date().toISOString()
-    });
-    
-    console.log(`Agent ${agentId} joining room ${roomId}`);
+    // Double-check connection status
+    if (!this.socket.connected) {
+      console.error('Socket connection lost, attempting to reconnect...');
+      this.connect();
+      return;
+    }
+
+    try {
+      // Add a small delay to ensure connection is stable
+      setTimeout(() => {
+        if (this.socket && this.socket.connected) {
+          this.socket.emit('agent_join_room', {
+            roomId,
+            agentId,
+            timestamp: new Date().toISOString()
+          });
+          
+          console.log(`Agent ${agentId} joining room ${roomId}`);
+        } else {
+          console.error('Socket disconnected during join attempt');
+        }
+      }, 100);
+    } catch (error) {
+      console.error('Error joining room:', error);
+    }
   }
 
   // Leave a chat room
@@ -145,15 +163,19 @@ class SocketManager {
       return;
     }
 
-    const messageData = {
-      roomId,
-      message,
-      agentId,
-      timestamp: new Date().toISOString(),
-      type: 'agent_message'
-    };
+    try {
+      const messageData = {
+        roomId,
+        message,
+        agentId,
+        timestamp: new Date().toISOString(),
+        type: 'agent_message'
+      };
 
-    this.socket.emit('agent_message', messageData);
+      this.socket.emit('agent_message', messageData);
+    } catch (error) {
+      console.error('Error sending message:', error);
+    }
   }
 
   // Close a chat session
