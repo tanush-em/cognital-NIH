@@ -37,6 +37,7 @@ const App = () => {
   const [activeRoom, setActiveRoom] = useState(null);
   const [chatSummary, setChatSummary] = useState(null);
   const [messages, setMessages] = useState([]);
+  const [pendingChatHistory, setPendingChatHistory] = useState([]);
 
   // UI state
   const [loading, setLoading] = useState(false);
@@ -102,15 +103,96 @@ const App = () => {
 
       socketManager.on('new_message', (data) => {
         console.log('New message received:', data);
+        console.log('Active room:', activeRoom);
+        console.log('Data session_id:', data.session_id);
+        console.log('Data role:', data.role);
         
         // Add message to messages array if it's for the active room
-        if (activeRoom && (data.session_id || data.role === 'agent')) {
-          setMessages(prev => [...prev, {
+        if (activeRoom && data.session_id) {
+          console.log('Adding new message to messages array');
+          setMessages(prev => {
+            // Check if this message already exists to avoid duplicates
+            const exists = prev.some(msg => 
+              msg.content === data.content && 
+              msg.timestamp === data.timestamp && 
+              msg.role === data.role
+            );
+            
+            if (exists) {
+              console.log('Message already exists, skipping');
+              return prev;
+            }
+            
+            console.log('Adding new message to array');
+            return [...prev, {
+              role: data.role,
+              content: data.content,
+              timestamp: data.timestamp,
+              session_id: data.session_id
+            }];
+          });
+        } else {
+          console.log('Not adding new message - activeRoom:', !!activeRoom, 'session_id:', data.session_id);
+          // If we have an active room but no session_id, still try to add the message
+          if (activeRoom && !data.session_id) {
+            console.log('Adding message without session_id for active room');
+            setMessages(prev => [...prev, {
+              role: data.role,
+              content: data.content,
+              timestamp: data.timestamp,
+              session_id: data.session_id
+            }]);
+          }
+        }
+      });
+
+      socketManager.on('chat_history', (data) => {
+        console.log('Chat history received:', data);
+        console.log('Active room:', activeRoom);
+        console.log('Data session_id:', data.session_id);
+        
+        // If activeRoom is not set yet, store the chat history temporarily
+        if (!activeRoom && data.session_id) {
+          console.log('Storing chat history temporarily - activeRoom not set yet');
+          setPendingChatHistory(prev => [...prev, {
             role: data.role,
             content: data.content,
             timestamp: data.timestamp,
-            session_id: data.session_id
+            session_id: data.session_id,
+            message_type: data.message_type,
+            metadata: data.metadata
           }]);
+          return;
+        }
+        
+        // Add chat history messages to messages array if it's for the active room
+        if (activeRoom && data.session_id) {
+          console.log('Adding chat history message to messages array');
+          setMessages(prev => {
+            // Check if this message already exists to avoid duplicates
+            const exists = prev.some(msg => 
+              msg.content === data.content && 
+              msg.timestamp === data.timestamp && 
+              msg.role === data.role
+            );
+            
+            if (exists) {
+              console.log('Message already exists, skipping');
+              return prev;
+            }
+            
+            console.log('Adding new message to array');
+            return [...prev, {
+              role: data.role,
+              content: data.content,
+              timestamp: data.timestamp,
+              session_id: data.session_id,
+              message_type: data.message_type,
+              metadata: data.metadata
+            }];
+          });
+        } else {
+          console.log('Not adding chat history - activeRoom:', !!activeRoom, 'session_id:', data.session_id);
         }
       });
 
@@ -142,7 +224,6 @@ const App = () => {
       // Request initial data
       setTimeout(async () => {
         await requestEscalations();
-        await fetchAnalytics();
       }, 1000);
     };
 
@@ -153,6 +234,34 @@ const App = () => {
       socketManager.disconnect();
     };
   }, []);
+
+  // Process pending chat history when activeRoom is set
+  useEffect(() => {
+    if (activeRoom && pendingChatHistory.length > 0) {
+      console.log('Processing pending chat history:', pendingChatHistory.length, 'messages');
+      setMessages(prev => {
+        const newMessages = [...prev];
+        
+        // Add pending messages that don't already exist
+        pendingChatHistory.forEach(pendingMsg => {
+          const exists = newMessages.some(msg => 
+            msg.content === pendingMsg.content && 
+            msg.timestamp === pendingMsg.timestamp && 
+            msg.role === pendingMsg.role
+          );
+          
+          if (!exists) {
+            newMessages.push(pendingMsg);
+          }
+        });
+        
+        return newMessages;
+      });
+      
+      // Clear pending chat history
+      setPendingChatHistory([]);
+    }
+  }, [activeRoom, pendingChatHistory]);
 
   const showNotification = useCallback((message, severity = 'info') => {
     setNotification({ open: true, message, severity });
@@ -190,18 +299,9 @@ const App = () => {
     }
   }, []);
 
-  const fetchAnalytics = useCallback(async () => {
-    try {
-      const response = await apiService.getAnalytics(7);
-      if (response.success) {
-        setAnalytics(response.analytics);
-      }
-    } catch (error) {
-      console.error('Error fetching analytics:', error);
-    }
-  }, []);
 
   const handleJoinRoom = useCallback((roomId) => {
+    console.log('Joining room:', roomId);
     if (!socketManager.isConnected()) {
       showNotification('Not connected to server', 'error');
       return;
@@ -212,12 +312,10 @@ const App = () => {
 
     // Find the escalation data
     const escalation = escalations.find(esc => esc.roomId === roomId);
+    console.log('Found escalation:', escalation);
     
-    // Join the room
-    socketManager.joinRoom(roomId);
-    
-    // Set as active room
-    setActiveRoom({
+    // Set as active room first
+    const newActiveRoom = {
       roomId,
       userName: escalation?.userName || 'Customer',
       status: 'escalated', // Set to escalated when agent joins
@@ -226,11 +324,21 @@ const App = () => {
       createdAt: escalation?.createdAt,
       escalationId: escalation?.escalationId,
       ...escalation
-    });
+    };
+    console.log('Setting active room:', newActiveRoom);
+    setActiveRoom(newActiveRoom);
 
-    // Clear messages for new room
+    // Clear messages for new room AFTER setting active room
+    console.log('Clearing messages array');
     setMessages([]);
-
+    
+    // Clear pending chat history for new room
+    setPendingChatHistory([]);
+    
+    // Join the room
+    console.log('Joining room via socket manager');
+    socketManager.joinRoom(roomId);
+    
     // Remove from escalations list
     setEscalations(prev => prev.filter(esc => esc.roomId !== roomId));
 
@@ -273,8 +381,7 @@ const App = () => {
 
   const handleRefresh = useCallback(async () => {
     await requestEscalations();
-    await fetchAnalytics();
-  }, [requestEscalations, fetchAnalytics]);
+  }, [requestEscalations]);
 
   const handleAssignEscalation = useCallback(async (escalationId, agentId = 'agent_001') => {
     try {
@@ -387,7 +494,6 @@ const App = () => {
               <Grid item xs={12}>
                 <ChatSummary
                   summary={chatSummary}
-                  analytics={analytics}
                   loading={false}
                   error={null}
                 />

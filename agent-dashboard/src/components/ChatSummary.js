@@ -9,21 +9,16 @@ import {
   CircularProgress,
   Alert,
   Grid,
-  Paper,
   LinearProgress
 } from '@mui/material';
 import {
   Summarize as SummaryIcon,
   Person as PersonIcon,
   Schedule as ScheduleIcon,
-  Tag as TagIcon,
-  TrendingUp as TrendingUpIcon,
-  Assessment as AssessmentIcon,
-  Speed as SpeedIcon,
-  Warning as WarningIcon
+  Tag as TagIcon
 } from '@mui/icons-material';
 
-const ChatSummary = ({ summary, analytics, loading, error }) => {
+const ChatSummary = ({ summary, loading, error }) => {
   if (loading) {
     return (
       <Card sx={{ mb: 2 }}>
@@ -53,12 +48,12 @@ const ChatSummary = ({ summary, analytics, loading, error }) => {
     );
   }
 
-  if (!summary && !analytics) {
+  if (!summary) {
     return (
       <Card sx={{ mb: 2 }}>
         <CardContent>
           <Typography variant="body2" color="text.secondary" textAlign="center">
-            No summary or analytics available
+            No summary available
           </Typography>
         </CardContent>
       </Card>
@@ -76,118 +71,6 @@ const ChatSummary = ({ summary, analytics, loading, error }) => {
 
   return (
     <Box sx={{ mb: 2 }}>
-      {/* Analytics Dashboard */}
-      {analytics && (
-        <Card sx={{ mb: 2 }}>
-          <CardContent>
-            <Box display="flex" alignItems="center" mb={2}>
-              <AssessmentIcon sx={{ mr: 1, color: 'primary.main' }} />
-              <Typography variant="h6" component="h2">
-                Analytics Dashboard
-              </Typography>
-            </Box>
-            
-            <Divider sx={{ mb: 2 }} />
-            
-            <Grid container spacing={2}>
-              {/* Automation Rate */}
-              <Grid item xs={12} sm={6} md={3}>
-                <Paper sx={{ p: 2, textAlign: 'center' }}>
-                  <SpeedIcon sx={{ fontSize: 40, color: 'success.main', mb: 1 }} />
-                  <Typography variant="h4" color="success.main">
-                    {analytics.session_stats?.automation_rate || 0}%
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    Automation Rate
-                  </Typography>
-                </Paper>
-              </Grid>
-              
-              {/* Total Sessions */}
-              <Grid item xs={12} sm={6} md={3}>
-                <Paper sx={{ p: 2, textAlign: 'center' }}>
-                  <TrendingUpIcon sx={{ fontSize: 40, color: 'info.main', mb: 1 }} />
-                  <Typography variant="h4" color="info.main">
-                    {analytics.session_stats?.total_sessions || 0}
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    Total Sessions
-                  </Typography>
-                </Paper>
-              </Grid>
-              
-              {/* Escalated Sessions */}
-              <Grid item xs={12} sm={6} md={3}>
-                <Paper sx={{ p: 2, textAlign: 'center' }}>
-                  <WarningIcon sx={{ fontSize: 40, color: 'warning.main', mb: 1 }} />
-                  <Typography variant="h4" color="warning.main">
-                    {analytics.session_stats?.escalated_sessions || 0}
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    Escalated
-                  </Typography>
-                </Paper>
-              </Grid>
-              
-              {/* Escalation Rate */}
-              <Grid item xs={12} sm={6} md={3}>
-                <Paper sx={{ p: 2, textAlign: 'center' }}>
-                  <Typography variant="h4" color="error.main">
-                    {analytics.escalation_analytics?.escalation_rate || 0}%
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    Escalation Rate
-                  </Typography>
-                </Paper>
-              </Grid>
-            </Grid>
-            
-            {/* Escalation Categories */}
-            {analytics.escalation_analytics?.category_breakdown && (
-              <Box mt={3}>
-                <Typography variant="subtitle1" gutterBottom>
-                  Escalation Categories
-                </Typography>
-                <Grid container spacing={1}>
-                  {Object.entries(analytics.escalation_analytics.category_breakdown).map(([category, count]) => (
-                    <Grid item key={category}>
-                      <Chip
-                        label={`${category}: ${count}`}
-                        variant="outlined"
-                        color="primary"
-                      />
-                    </Grid>
-                  ))}
-                </Grid>
-              </Box>
-            )}
-            
-            {/* Priority Breakdown */}
-            {analytics.escalation_analytics?.priority_breakdown && (
-              <Box mt={2}>
-                <Typography variant="subtitle1" gutterBottom>
-                  Priority Breakdown
-                </Typography>
-                <Grid container spacing={1}>
-                  {Object.entries(analytics.escalation_analytics.priority_breakdown).map(([priority, count]) => (
-                    <Grid item key={priority}>
-                      <Chip
-                        label={`${priority}: ${count}`}
-                        variant="filled"
-                        color={
-                          priority === 'critical' ? 'error' :
-                          priority === 'high' ? 'warning' :
-                          priority === 'medium' ? 'info' : 'default'
-                        }
-                      />
-                    </Grid>
-                  ))}
-                </Grid>
-              </Box>
-            )}
-          </CardContent>
-        </Card>
-      )}
       
       {/* Chat Summary */}
       {summary && (

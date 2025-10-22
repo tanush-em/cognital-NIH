@@ -3,7 +3,7 @@ WebSocket service for real-time chat functionality
 """
 from flask import request
 from flask_socketio import emit, join_room, leave_room
-from models.chat_models import ChatSession
+from models.chat_models import ChatSession, ChatMessage
 from services.rag_service import rag_service
 from services.llm_service import llm_service
 from services.escalation_service import escalation_service
@@ -114,52 +114,6 @@ class WebSocketService:
                 logger.error(f"Error closing session: {str(e)}")
                 emit('error', {'message': 'Failed to close session'})
         
-        @self.socketio.on('send_message')
-        def handle_send_message(data):
-            """Handle incoming messages"""
-            try:
-                room_id = data.get('room_id')
-                message = data.get('message')
-                user_type = data.get('user_type', 'user')
-                user_id = data.get('user_id')
-                
-                if not all([room_id, message, user_id]):
-                    emit('error', {'message': 'Missing required fields'})
-                    return
-                
-                # Get session
-                session = ChatSession.query.filter_by(room_id=room_id).first()
-                if not session:
-                    emit('error', {'message': 'Session not found'})
-                    return
-                
-                
-                # Broadcast user message to room
-                self.socketio.emit('new_message', {
-                    'role': user_type,
-                    'content': message,
-                    'timestamp': datetime.utcnow().isoformat(),
-                    'session_id': session.id
-                }, room=room_id)
-                
-                # Also emit chat_message for agent dashboard compatibility
-                if user_type == 'user':
-                    self.socketio.emit('chat_message', {
-                        'role': user_type,
-                        'content': message,
-                        'timestamp': datetime.utcnow().isoformat(),
-                        'session_id': session.id
-                    }, room=room_id)
-                
-                # Handle AI response or escalation
-                if user_type == 'user' and session.status == 'active' and not session.agent_id:
-                    self._handle_user_message(session, message, room_id)
-                elif user_type == 'agent':
-                    self._handle_agent_message(session, message, room_id)
-                
-            except Exception as e:
-                logger.error(f"Error handling message: {str(e)}")
-                emit('error', {'message': 'Failed to process message'})
         
         @self.socketio.on('join_session')
         def handle_join_session(data):
@@ -215,6 +169,21 @@ class WebSocketService:
                 if not session:
                     emit('error', {'message': 'Session not found'})
                     return
+                
+                # Save user message to database
+                try:
+                    user_message = ChatMessage(
+                        session_id=session.id,
+                        role='user',
+                        content=message,
+                        message_type='text'
+                    )
+                    db.session.add(user_message)
+                    db.session.commit()
+                    logger.info(f"Saved user message to database for session {session.id}")
+                except Exception as e:
+                    logger.error(f"Error saving user message to database: {str(e)}")
+                    db.session.rollback()
                 
                 # Broadcast user message to room
                 self.socketio.emit('new_message', {
@@ -291,6 +260,22 @@ class WebSocketService:
                 
                 # Send escalation message to user
                 escalation_msg = "I understand you need additional help. I'm connecting you with a human agent who will be with you shortly."
+                
+                # Save escalation message to database
+                try:
+                    escalation_message = ChatMessage(
+                        session_id=session.id,
+                        role='ai',
+                        content=escalation_msg,
+                        message_type='escalation',
+                        message_metadata={'escalation_id': escalation.id, 'reasons': escalation_check.get('reasons', [])}
+                    )
+                    db.session.add(escalation_message)
+                    db.session.commit()
+                    logger.info(f"Saved escalation message to database for session {session.id}")
+                except Exception as e:
+                    logger.error(f"Error saving escalation message to database: {str(e)}")
+                    db.session.rollback()
                 
                 self.socketio.emit('new_message', {
                     'role': 'ai',
@@ -373,6 +358,22 @@ class WebSocketService:
             # Calculate confidence
             confidence = rag_service.calculate_confidence(user_message, response['response'])
             
+            
+            # Save AI response to database
+            try:
+                ai_message = ChatMessage(
+                    session_id=session.id,
+                    role='ai',
+                    content=response['response'],
+                    message_type='text',
+                    message_metadata={'confidence': confidence}
+                )
+                db.session.add(ai_message)
+                db.session.commit()
+                logger.info(f"Saved AI response to database for session {session.id}")
+            except Exception as e:
+                logger.error(f"Error saving AI response to database: {str(e)}")
+                db.session.rollback()
             
             # Broadcast AI response
             logger.info(f"Emitting AI response to room {room_id}: {response['response'][:100]}...")
@@ -517,6 +518,31 @@ class WebSocketService:
                         # Don't return here, continue with notifications
                 else:
                     logger.warning(f"No session found for room {room_id}")
+                
+                # Load and send chat history to agent
+                if session:
+                    try:
+                        # Get chat history for this session
+                        chat_messages = ChatMessage.query.filter_by(session_id=session.id).order_by(ChatMessage.timestamp.asc()).all()
+                        
+                        # Send chat history directly to the agent's socket connection
+                        # Add a small delay to ensure the agent dashboard is ready
+                        import time
+                        time.sleep(0.1)  # 100ms delay
+                        
+                        for msg in chat_messages:
+                            emit('chat_history', {
+                                'role': msg.role,
+                                'content': msg.content,
+                                'timestamp': msg.timestamp.isoformat(),
+                                'session_id': session.id,
+                                'message_type': msg.message_type,
+                                'metadata': msg.message_metadata
+                            })
+                        
+                        logger.info(f"Sent {len(chat_messages)} chat history messages to agent {agent_id}")
+                    except Exception as e:
+                        logger.error(f"Error loading chat history: {str(e)}")
                 
                 # Always send notifications, even if session update failed
                 try:

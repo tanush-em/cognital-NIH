@@ -97,6 +97,16 @@ class SocketManager {
       this.emit('agent_left', data);
     });
 
+    this.socket.on('chat_history', (data) => {
+      console.log('Chat history received:', data);
+      this.emit('chat_history', data);
+    });
+
+    this.socket.on('new_message', (data) => {
+      console.log('New message received:', data);
+      this.emit('new_message', data);
+    });
+
     return this.socket;
   }
 

@@ -33,6 +33,33 @@ class ChatSession(db.Model):
         }
 
 
+class ChatMessage(db.Model):
+    """Individual chat message model"""
+    __tablename__ = 'chat_messages'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    session_id = db.Column(db.Integer, db.ForeignKey('chat_sessions.id'), nullable=False)
+    role = db.Column(db.String(20), nullable=False)  # user, ai, agent, system
+    content = db.Column(db.Text, nullable=False)
+    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
+    message_type = db.Column(db.String(20), default='text')  # text, system, escalation
+    message_metadata = db.Column(db.JSON, nullable=True)  # Additional message metadata
+    
+    # Relationships
+    session = db.relationship('ChatSession', backref='messages', lazy=True)
+    
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'session_id': self.session_id,
+            'role': self.role,
+            'content': self.content,
+            'timestamp': self.timestamp.isoformat(),
+            'message_type': self.message_type,
+            'metadata': self.message_metadata
+        }
+
+
 class Escalation(db.Model):
     """Escalation tracking model"""
     __tablename__ = 'escalations'
