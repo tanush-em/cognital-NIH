@@ -18,11 +18,14 @@ class SocketManager {
       upgrade: true,
       rememberUpgrade: true,
       reconnection: true,
-      reconnectionAttempts: 5,
+      reconnectionAttempts: 10,
       reconnectionDelay: 1000,
+      reconnectionDelayMax: 5000,
       timeout: 20000,
-      forceNew: true,
-      multiplex: false
+      forceNew: false,
+      multiplex: false,
+      pingTimeout: 60000,
+      pingInterval: 25000
     });
 
     // Connection event handlers
@@ -39,10 +42,10 @@ class SocketManager {
       });
     });
 
-    this.socket.on('disconnect', () => {
-      console.log('Disconnected from server');
+    this.socket.on('disconnect', (reason) => {
+      console.log('Disconnected from server:', reason);
       this.connected = false;
-      this.emit('connection_status', { connected: false });
+      this.emit('connection_status', { connected: false, reason });
     });
 
     this.socket.on('connect_error', (error) => {

@@ -95,6 +95,16 @@ const App = () => {
         );
       });
 
+      socketManager.on('new_message', (data) => {
+        console.log('New message received:', data);
+        
+        // If this message is for the active room, we could store it
+        // For now, we'll just log it since the ChatWindow doesn't have message history
+        if (activeRoom && data.session_id) {
+          console.log('Message for active room:', data);
+        }
+      });
+
       socketManager.on('session_closed', (data) => {
         console.log('Session closed:', data);
         
@@ -201,7 +211,11 @@ const App = () => {
     setActiveRoom({
       roomId,
       userName: escalation?.userName || 'Customer',
-      status: escalation?.status || 'active',
+      status: 'escalated', // Set to escalated when agent joins
+      priority: escalation?.priority,
+      reason: escalation?.reason,
+      createdAt: escalation?.createdAt,
+      escalationId: escalation?.escalationId,
       ...escalation
     });
 

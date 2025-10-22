@@ -267,11 +267,11 @@ const ChatList = ({
                       }
                       secondary={
                         <Box>
-                          <Typography variant="body2" color="text.secondary" noWrap component="div">
+                          <Typography variant="body2" color="text.secondary" noWrap>
                             Room: {room.roomId}
                           </Typography>
                           <Box display="flex" alignItems="center" gap={1} mt={0.5}>
-                            <Typography variant="caption" color="text.secondary" component="span">
+                            <Typography variant="caption" color="text.secondary">
                               {formatTimeAgo(room.escalatedAt || room.createdAt)}
                             </Typography>
                             {room.priority && (
@@ -287,7 +287,6 @@ const ChatList = ({
                             <Typography 
                               variant="caption" 
                               color="text.secondary"
-                              component="div"
                               sx={{ 
                                 display: 'block',
                                 mt: 0.5,

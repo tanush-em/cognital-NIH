@@ -220,15 +220,35 @@ const ChatWindow = ({
           alignItems: 'center', 
           justifyContent: 'center', 
           height: '100%',
-          textAlign: 'center'
+          textAlign: 'center',
+          p: 2
         }}>
           <Box>
             <Typography variant="body1" color="text.secondary" gutterBottom>
-              {activeRoom ? 'Start the conversation by sending a message below' : 'Select a chat to begin'}
+              {activeRoom ? 'You are now connected to the customer' : 'Select a chat to begin'}
             </Typography>
-            <Typography variant="body2" color="text.secondary">
-              {activeRoom ? 'Messages will appear here in real-time' : 'No active chat session'}
+            <Typography variant="body2" color="text.secondary" gutterBottom>
+              {activeRoom ? 'Start the conversation by sending a message below' : 'No active chat session'}
             </Typography>
+            {activeRoom && (
+              <Box sx={{ mt: 2, p: 2, bgcolor: 'primary.light', borderRadius: 1 }}>
+                <Typography variant="caption" color="primary.contrastText">
+                  Customer: {activeRoom.userName || 'Unknown'}
+                </Typography>
+                <br />
+                <Typography variant="caption" color="primary.contrastText">
+                  Room: {activeRoom.roomId}
+                </Typography>
+                {activeRoom.reason && (
+                  <>
+                    <br />
+                    <Typography variant="caption" color="primary.contrastText">
+                      Reason: {activeRoom.reason}
+                    </Typography>
+                  </>
+                )}
+              </Box>
+            )}
           </Box>
         </Box>
         <div ref={messagesEndRef} />
