@@ -300,7 +300,7 @@ const App = () => {
   }, []);
 
 
-  const handleJoinRoom = useCallback((roomId) => {
+  const handleJoinRoom = useCallback(async (roomId) => {
     console.log('Joining room:', roomId);
     if (!socketManager.isConnected()) {
       showNotification('Not connected to server', 'error');
@@ -323,6 +323,7 @@ const App = () => {
       reason: escalation?.reason,
       createdAt: escalation?.createdAt,
       escalationId: escalation?.escalationId,
+      sessionId: escalation?.sessionId,
       ...escalation
     };
     console.log('Setting active room:', newActiveRoom);
@@ -334,6 +335,26 @@ const App = () => {
     
     // Clear pending chat history for new room
     setPendingChatHistory([]);
+    
+    // Fetch session summary
+    if (escalation?.sessionId) {
+      try {
+        console.log('Fetching session summary for session:', escalation.sessionId);
+        const summaryResponse = await apiService.getSessionSummary(escalation.sessionId);
+        if (summaryResponse.success) {
+          console.log('Session summary loaded:', summaryResponse.summary);
+          setChatSummary(summaryResponse.summary);
+        } else {
+          console.warn('Failed to load session summary:', summaryResponse.error);
+          setChatSummary(null);
+        }
+      } catch (error) {
+        console.error('Error fetching session summary:', error);
+        setChatSummary(null);
+      }
+    } else {
+      setChatSummary(null);
+    }
     
     // Join the room
     console.log('Joining room via socket manager');
@@ -494,8 +515,8 @@ const App = () => {
               <Grid item xs={12}>
                 <ChatSummary
                   summary={chatSummary}
-                  loading={false}
-                  error={null}
+                  loading={loading}
+                  error={error}
                 />
               </Grid>
 

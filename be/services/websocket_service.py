@@ -255,6 +255,14 @@ class WebSocketService:
                     escalation_analysis=escalation_check.get('analysis', {})
                 )
                 
+                # Pre-generate session summary for faster agent loading
+                try:
+                    from services.session_summary_service import session_summary_service
+                    session_summary_service.generate_session_summary(session.id)
+                    logger.info(f"Pre-generated session summary for session {session.id}")
+                except Exception as e:
+                    logger.warning(f"Failed to pre-generate session summary: {str(e)}")
+                
                 # Notify agents
                 self._notify_agents_escalation(session, escalation_check)
                 
@@ -445,6 +453,52 @@ class WebSocketService:
             logger.error(f"Error joining agents room: {str(e)}")
             return False
     
+    def _get_relevant_chat_history(self, session_id):
+        """Get relevant chat history for agent - only current escalation context"""
+        try:
+            from models.chat_models import Escalation
+            
+            # Get the most recent pending escalation for this session
+            recent_escalation = Escalation.query.filter_by(
+                session_id=session_id, 
+                status='pending'
+            ).order_by(Escalation.created_at.desc()).first()
+            
+            if recent_escalation:
+                # Get messages from the escalation time onwards, excluding old escalation messages
+                chat_messages = ChatMessage.query.filter(
+                    ChatMessage.session_id == session_id,
+                    ChatMessage.timestamp >= recent_escalation.triggered_at,
+                    ChatMessage.message_type != 'escalation'  # Exclude old escalation messages
+                ).order_by(ChatMessage.timestamp.asc()).all()
+                
+                # Add the current escalation message at the beginning
+                escalation_message = ChatMessage.query.filter(
+                    ChatMessage.session_id == session_id,
+                    ChatMessage.message_type == 'escalation',
+                    ChatMessage.message_metadata.contains({'escalation_id': recent_escalation.id})
+                ).first()
+                
+                if escalation_message:
+                    chat_messages.insert(0, escalation_message)
+                
+                logger.info(f"Loading chat history from escalation {recent_escalation.id} onwards ({len(chat_messages)} messages)")
+                return chat_messages
+            else:
+                # Fallback: get only the last 10 messages to avoid overwhelming the agent
+                chat_messages = ChatMessage.query.filter_by(
+                    session_id=session_id
+                ).order_by(ChatMessage.timestamp.desc()).limit(10).all()
+                
+                # Reverse to get chronological order
+                chat_messages.reverse()
+                logger.info(f"Loading last 10 messages as fallback ({len(chat_messages)} messages)")
+                return chat_messages
+                
+        except Exception as e:
+            logger.error(f"Error getting relevant chat history: {str(e)}")
+            return []
+
     def _send_existing_escalations(self):
         """Send existing pending escalations to connected agents"""
         try:
@@ -522,8 +576,8 @@ class WebSocketService:
                 # Load and send chat history to agent
                 if session:
                     try:
-                        # Get chat history for this session
-                        chat_messages = ChatMessage.query.filter_by(session_id=session.id).order_by(ChatMessage.timestamp.asc()).all()
+                        # Get relevant chat history (only current escalation context)
+                        chat_messages = self._get_relevant_chat_history(session.id)
                         
                         # Send chat history directly to the agent's socket connection
                         # Add a small delay to ensure the agent dashboard is ready
@@ -540,7 +594,7 @@ class WebSocketService:
                                 'metadata': msg.message_metadata
                             })
                         
-                        logger.info(f"Sent {len(chat_messages)} chat history messages to agent {agent_id}")
+                        logger.info(f"Sent {len(chat_messages)} relevant chat history messages to agent {agent_id}")
                     except Exception as e:
                         logger.error(f"Error loading chat history: {str(e)}")
                 

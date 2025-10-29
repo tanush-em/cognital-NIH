@@ -55,6 +55,10 @@ class ApiService {
     return this.request(`/sessions?status=${status}&limit=${limit}`);
   }
 
+  async getSessionSummary(sessionId) {
+    return this.request(`/sessions/${sessionId}/summary`);
+  }
+
 
   // Agent endpoints
   async getAgents() {

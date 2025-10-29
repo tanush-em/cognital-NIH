@@ -269,6 +269,9 @@ class EscalationService:
                 session.status = 'escalated'
                 db.session.commit()
             
+            # Mark previous escalations as resolved to avoid confusion
+            self._resolve_previous_escalations(session_id, escalation.id)
+            
             logger.info(f"Created {priority} priority escalation for session {session_id}: {reason}")
             return escalation
             
@@ -276,6 +279,29 @@ class EscalationService:
             logger.error(f"Error creating escalation: {str(e)}")
             db.session.rollback()
             raise
+    
+    def _resolve_previous_escalations(self, session_id: int, current_escalation_id: int):
+        """Mark previous escalations as resolved to avoid confusion"""
+        try:
+            from models.chat_models import Escalation
+            # Mark all previous escalations for this session as resolved
+            previous_escalations = Escalation.query.filter(
+                Escalation.session_id == session_id,
+                Escalation.id != current_escalation_id,
+                Escalation.status == 'pending'
+            ).all()
+            
+            for prev_esc in previous_escalations:
+                prev_esc.status = 'resolved'
+                prev_esc.handled_at = datetime.utcnow()
+            
+            if previous_escalations:
+                db.session.commit()
+                logger.info(f"Resolved {len(previous_escalations)} previous escalations for session {session_id}")
+                
+        except Exception as e:
+            logger.error(f"Error resolving previous escalations: {str(e)}")
+            # Don't raise here as this is not critical
     
     def get_available_agents(self) -> List[Dict[str, Any]]:
         """Get list of available agents"""

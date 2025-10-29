@@ -153,15 +153,90 @@ const ChatSummary = ({ summary, loading, error }) => {
           <Typography variant="subtitle2" color="text.secondary" gutterBottom>
             AI Summary
           </Typography>
-          <Typography variant="body2" sx={{ 
-            backgroundColor: 'grey.50', 
-            p: 2, 
-            borderRadius: 1,
-            border: '1px solid',
-            borderColor: 'grey.200'
-          }}>
-            {summary.summary || 'No summary generated yet.'}
-          </Typography>
+          
+          {/* Structured Summary Sections */}
+          {summary.summary && typeof summary.summary === 'object' ? (
+            <Box sx={{ 
+              backgroundColor: 'grey.50', 
+              p: 2, 
+              borderRadius: 1,
+              border: '1px solid',
+              borderColor: 'grey.200'
+            }}>
+              {/* Main Issue */}
+              {summary.summary.mainIssue && (
+                <Box mb={2}>
+                  <Typography variant="subtitle2" color="primary.main" gutterBottom>
+                    Main Issue
+                  </Typography>
+                  <Typography variant="body2" sx={{ ml: 1 }}>
+                    {summary.summary.mainIssue}
+                  </Typography>
+                </Box>
+              )}
+              
+              {/* What's Been Tried */}
+              {summary.summary.triedSolutions && (
+                <Box mb={2}>
+                  <Typography variant="subtitle2" color="primary.main" gutterBottom>
+                    What's Been Tried
+                  </Typography>
+                  <Typography variant="body2" sx={{ ml: 1 }}>
+                    {summary.summary.triedSolutions}
+                  </Typography>
+                </Box>
+              )}
+              
+              {/* Current Status */}
+              {summary.summary.currentStatus && (
+                <Box mb={2}>
+                  <Typography variant="subtitle2" color="primary.main" gutterBottom>
+                    Current Status
+                  </Typography>
+                  <Typography variant="body2" sx={{ ml: 1 }}>
+                    {summary.summary.currentStatus}
+                  </Typography>
+                </Box>
+              )}
+              
+              {/* What Customer Needs Help With */}
+              {summary.summary.customerNeeds && (
+                <Box mb={2}>
+                  <Typography variant="subtitle2" color="primary.main" gutterBottom>
+                    What Customer Needs Help With
+                  </Typography>
+                  <Typography variant="body2" sx={{ ml: 1 }}>
+                    {summary.summary.customerNeeds}
+                  </Typography>
+                </Box>
+              )}
+              
+              {/* Actionable Recommendation */}
+              {summary.summary.recommendation && (
+                <Box>
+                  <Typography variant="subtitle2" color="primary.main" gutterBottom>
+                    Actionable Recommendation
+                  </Typography>
+                  <Alert severity="info" variant="outlined" sx={{ ml: 1 }}>
+                    <Typography variant="body2">
+                      {summary.summary.recommendation}
+                    </Typography>
+                  </Alert>
+                </Box>
+              )}
+            </Box>
+          ) : (
+            /* Fallback for old string format */
+            <Typography variant="body2" sx={{ 
+              backgroundColor: 'grey.50', 
+              p: 2, 
+              borderRadius: 1,
+              border: '1px solid',
+              borderColor: 'grey.200'
+            }}>
+              {summary.summary || 'No summary generated yet.'}
+            </Typography>
+          )}
         </Box>
 
         {/* Key Points */}

@@ -339,6 +339,26 @@ def assign_escalation_by_session():
         logger.error(f"Error assigning escalation by session: {str(e)}")
         return jsonify({'error': 'Internal server error'}), 500
 
+@admin_bp.route('/sessions/<int:session_id>/summary', methods=['GET'])
+def get_session_summary(session_id):
+    """Get comprehensive session summary for agent dashboard"""
+    try:
+        from services.session_summary_service import session_summary_service
+        
+        summary = session_summary_service.generate_session_summary(session_id)
+        
+        if 'error' in summary:
+            return jsonify({'error': summary['error']}), 404
+        
+        return jsonify({
+            'success': True,
+            'summary': summary
+        })
+        
+    except Exception as e:
+        logger.error(f"Error getting session summary: {str(e)}")
+        return jsonify({'error': 'Internal server error'}), 500
+
 @admin_bp.route('/sessions', methods=['GET'])
 def get_sessions():
     """Get all chat sessions for agent dashboard"""
