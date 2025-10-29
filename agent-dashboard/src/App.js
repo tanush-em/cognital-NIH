@@ -444,7 +444,7 @@ const App = () => {
         <Toolbar>
           <SupportIcon sx={{ mr: 2 }} />
           <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
-            Agent Dashboard
+            Human Agent Dashboard
           </Typography>
           
           {/* Connection Status */}
@@ -453,7 +453,7 @@ const App = () => {
               icon={isConnected ? <WifiIcon /> : <WifiOffIcon />}
               label={isConnected ? 'Connected' : 'Disconnected'}
               color={isConnected ? 'success' : 'error'}
-              variant="outlined"
+              variant="filled"
               size="small"
             />
             
