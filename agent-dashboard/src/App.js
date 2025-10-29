@@ -68,14 +68,13 @@ const App = () => {
       // Chat event listeners
       socketManager.on('escalation_pending', (data) => {
         console.log('New escalation:', data);
-        console.log('Current escalations before update:', escalations);
         
         setEscalations(prev => {
           console.log('Previous escalations state:', prev);
           const existing = prev.find(e => e.roomId === data.roomId);
           if (existing) {
-            console.log('Updating existing escalation');
-            return prev.map(e => e.roomId === data.roomId ? { ...e, ...data } : e);
+            console.log('Escalation already exists, skipping duplicate');
+            return prev; // Don't update if already exists
           }
           // Ensure unique key for new escalations
           const escalationWithKey = {
@@ -103,97 +102,77 @@ const App = () => {
 
       socketManager.on('new_message', (data) => {
         console.log('New message received:', data);
-        console.log('Active room:', activeRoom);
         console.log('Data session_id:', data.session_id);
         console.log('Data role:', data.role);
         
-        // Add message to messages array if it's for the active room
-        if (activeRoom && data.session_id) {
-          console.log('Adding new message to messages array');
-          setMessages(prev => {
-            // Check if this message already exists to avoid duplicates
-            const exists = prev.some(msg => 
-              msg.content === data.content && 
-              msg.timestamp === data.timestamp && 
-              msg.role === data.role
-            );
-            
-            if (exists) {
-              console.log('Message already exists, skipping');
-              return prev;
-            }
-            
-            console.log('Adding new message to array');
-            return [...prev, {
-              role: data.role,
-              content: data.content,
-              timestamp: data.timestamp,
-              session_id: data.session_id
-            }];
-          });
-        } else {
-          console.log('Not adding new message - activeRoom:', !!activeRoom, 'session_id:', data.session_id);
-          // If we have an active room but no session_id, still try to add the message
-          if (activeRoom && !data.session_id) {
-            console.log('Adding message without session_id for active room');
-            setMessages(prev => [...prev, {
-              role: data.role,
-              content: data.content,
-              timestamp: data.timestamp,
-              session_id: data.session_id
-            }]);
+        // Add message to messages array - check against current activeRoom state
+        setMessages(prev => {
+          // Get current activeRoom from the state
+          const currentActiveRoom = activeRoom;
+          console.log('Current active room in message handler:', currentActiveRoom);
+          
+          // Check if this message is for the active room
+          const isForActiveRoom = currentActiveRoom && (
+            data.session_id === currentActiveRoom.sessionId || 
+            data.session_id === currentActiveRoom.session_id ||
+            (!data.session_id && currentActiveRoom) // Handle messages without session_id
+          );
+          
+          if (!isForActiveRoom) {
+            console.log('Message not for active room, skipping');
+            return prev;
           }
-        }
+          
+          // Check if this message already exists to avoid duplicates
+          const exists = prev.some(msg => 
+            msg.content === data.content && 
+            msg.timestamp === data.timestamp && 
+            msg.role === data.role
+          );
+          
+          if (exists) {
+            console.log('Message already exists, skipping');
+            return prev;
+          }
+          
+          console.log('Adding new message to array');
+          return [...prev, {
+            role: data.role,
+            content: data.content,
+            timestamp: data.timestamp,
+            session_id: data.session_id
+          }];
+        });
       });
 
       socketManager.on('chat_history', (data) => {
         console.log('Chat history received:', data);
-        console.log('Active room:', activeRoom);
         console.log('Data session_id:', data.session_id);
         
-        // If activeRoom is not set yet, store the chat history temporarily
-        if (!activeRoom && data.session_id) {
-          console.log('Storing chat history temporarily - activeRoom not set yet');
-          setPendingChatHistory(prev => [...prev, {
+        // Always store chat history temporarily first, then process based on activeRoom
+        setPendingChatHistory(prev => {
+          // Check if this message already exists in pending history
+          const exists = prev.some(msg => 
+            msg.content === data.content && 
+            msg.timestamp === data.timestamp && 
+            msg.role === data.role
+          );
+          
+          if (exists) {
+            console.log('Chat history message already exists in pending, skipping');
+            return prev;
+          }
+          
+          console.log('Storing chat history temporarily');
+          return [...prev, {
             role: data.role,
             content: data.content,
             timestamp: data.timestamp,
             session_id: data.session_id,
             message_type: data.message_type,
             metadata: data.metadata
-          }]);
-          return;
-        }
-        
-        // Add chat history messages to messages array if it's for the active room
-        if (activeRoom && data.session_id) {
-          console.log('Adding chat history message to messages array');
-          setMessages(prev => {
-            // Check if this message already exists to avoid duplicates
-            const exists = prev.some(msg => 
-              msg.content === data.content && 
-              msg.timestamp === data.timestamp && 
-              msg.role === data.role
-            );
-            
-            if (exists) {
-              console.log('Message already exists, skipping');
-              return prev;
-            }
-            
-            console.log('Adding new message to array');
-            return [...prev, {
-              role: data.role,
-              content: data.content,
-              timestamp: data.timestamp,
-              session_id: data.session_id,
-              message_type: data.message_type,
-              metadata: data.metadata
-            }];
-          });
-        } else {
-          console.log('Not adding chat history - activeRoom:', !!activeRoom, 'session_id:', data.session_id);
-        }
+          }];
+        });
       });
 
       socketManager.on('session_closed', (data) => {
@@ -314,7 +293,12 @@ const App = () => {
     const escalation = escalations.find(esc => esc.roomId === roomId);
     console.log('Found escalation:', escalation);
     
-    // Set as active room first
+    // Clear messages and pending chat history first
+    console.log('Clearing messages array and pending chat history');
+    setMessages([]);
+    setPendingChatHistory([]);
+    
+    // Set as active room
     const newActiveRoom = {
       roomId,
       userName: escalation?.userName || 'Customer',
@@ -328,13 +312,6 @@ const App = () => {
     };
     console.log('Setting active room:', newActiveRoom);
     setActiveRoom(newActiveRoom);
-
-    // Clear messages for new room AFTER setting active room
-    console.log('Clearing messages array');
-    setMessages([]);
-    
-    // Clear pending chat history for new room
-    setPendingChatHistory([]);
     
     // Fetch session summary
     if (escalation?.sessionId) {
@@ -356,12 +333,12 @@ const App = () => {
       setChatSummary(null);
     }
     
-    // Join the room
+    // Remove from escalations list BEFORE joining room
+    setEscalations(prev => prev.filter(esc => esc.roomId !== roomId));
+    
+    // Join the room AFTER setting active room and clearing state
     console.log('Joining room via socket manager');
     socketManager.joinRoom(roomId);
-    
-    // Remove from escalations list
-    setEscalations(prev => prev.filter(esc => esc.roomId !== roomId));
 
     setLoading(false);
     showNotification(`Joined room ${roomId}`, 'success');
