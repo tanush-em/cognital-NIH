@@ -1,7 +1,3 @@
-"""
-Session Summary Service for generating comprehensive chat summaries
-Provides AI-powered analysis of chat sessions to help agents understand context
-"""
 from typing import Dict, Any, List, Optional
 from models.chat_models import ChatSession, ChatMessage, Escalation
 from models.user_models import User
@@ -16,7 +12,6 @@ logger = logging.getLogger(__name__)
 
 class SessionSummaryService:
     def __init__(self):
-        """Initialize session summary service"""
         self.issue_keywords = {
             'billing': ['bill', 'charge', 'payment', 'cost', 'price', 'fee', 'invoice', 'billing'],
             'technical': ['internet', 'wifi', 'connection', 'speed', 'router', 'modem', 'signal', 'network'],
@@ -34,23 +29,14 @@ class SessionSummaryService:
         }
 
     def generate_session_summary(self, session_id: int) -> Dict[str, Any]:
-        """Generate comprehensive session summary for agent dashboard"""
         try:
-            # Get session and related data
             session = ChatSession.query.get(session_id)
             if not session:
                 return {'error': 'Session not found'}
-            
-            # Get chat messages
             messages = ChatMessage.query.filter_by(session_id=session_id).order_by(ChatMessage.timestamp.asc()).all()
-            
-            # Get escalation info
             escalation = Escalation.query.filter_by(session_id=session_id, status='pending').first()
-            
-            # Get user info
             user = User.query.filter_by(user_id=session.user_id).first()
             
-            # Generate summary components
             summary_data = {
                 'session_id': session_id,
                 'room_id': session.room_id,
@@ -73,7 +59,6 @@ class SessionSummaryService:
             return {'error': str(e)}
 
     def _extract_user_info(self, user: Optional[User], session: ChatSession) -> Dict[str, Any]:
-        """Extract user information"""
         if user:
             return {
                 'name': user.name,
@@ -90,7 +75,6 @@ class SessionSummaryService:
             }
 
     def _extract_session_info(self, session: ChatSession, messages: List[ChatMessage]) -> Dict[str, Any]:
-        """Extract session information"""
         if not messages:
             return {
                 'startTime': session.created_at.isoformat(),
@@ -110,7 +94,6 @@ class SessionSummaryService:
         }
 
     def _identify_issues(self, messages: List[ChatMessage]) -> List[str]:
-        """Identify issue categories from messages"""
         issue_counts = Counter()
         all_text = ' '.join([msg.content.lower() for msg in messages if msg.role == 'user'])
         
@@ -119,7 +102,6 @@ class SessionSummaryService:
                 if keyword in all_text:
                     issue_counts[category] += all_text.count(keyword)
         
-        # Return top 3 issues
         return [issue for issue, count in issue_counts.most_common(3)]
 
     def _analyze_sentiment(self, messages: List[ChatMessage]) -> str:
@@ -133,7 +115,6 @@ class SessionSummaryService:
             for keyword in keywords:
                 sentiment_scores[sentiment] += all_text.count(keyword)
         
-        # Determine overall sentiment
         if sentiment_scores['negative'] > sentiment_scores['positive']:
             return 'negative'
         elif sentiment_scores['positive'] > sentiment_scores['negative']:
@@ -144,13 +125,11 @@ class SessionSummaryService:
     def _generate_ai_summary(self, messages: List[ChatMessage], escalation: Optional[Escalation]) -> Dict[str, str]:
         """Generate AI-powered conversation summary with structured parsing"""
         try:
-            # Prepare conversation context
             conversation_text = ""
             for msg in messages[-10:]:  # Last 10 messages for context
                 role = "Customer" if msg.role == 'user' else "AI Assistant"
                 conversation_text += f"{role}: {msg.content}\n"
             
-            # Create prompt for structured summary generation
             prompt = f"""
             Analyze this customer support conversation and provide a structured summary for a human agent.
             
@@ -170,13 +149,11 @@ class SessionSummaryService:
             Keep each section concise and actionable. Do not use emojis or special formatting.
             """
             
-            # Generate summary using LLM service
             response = llm_service.generate_response(
                 user_message=prompt,
                 context="You are an AI assistant helping human agents understand customer conversations. Provide structured, professional summaries."
             )
             
-            # Parse the structured response
             structured_summary = self._parse_structured_summary(response['response'])
             return structured_summary
             
@@ -193,7 +170,6 @@ class SessionSummaryService:
     def _parse_structured_summary(self, summary_text: str) -> Dict[str, str]:
         """Parse structured AI summary into components"""
         try:
-            # Initialize structured components
             structured = {
                 'mainIssue': '',
                 'triedSolutions': '',
@@ -202,8 +178,6 @@ class SessionSummaryService:
                 'recommendation': ''
             }
             
-            # Handle different formats of structured text
-            # Format 1: **Section:** content
             sections = summary_text.split('**')
             
             for i, section in enumerate(sections):
@@ -220,10 +194,8 @@ class SessionSummaryService:
                 elif section.startswith('Actionable Recommendation:'):
                     structured['recommendation'] = section.replace('Actionable Recommendation:', '').strip()
             
-            # Format 2: Handle numbered format like "1. **Main Issue:** content"
             if not any(structured.values()):
                 import re
-                # Look for numbered sections
                 patterns = {
                     'mainIssue': r'1\.\s*\*\*Main Issue:\*\*\s*(.*?)(?=2\.|\*\*|$)',
                     'triedSolutions': r'2\.\s*\*\*What\'s Been Tried:\*\*\s*(.*?)(?=3\.|\*\*|$)',
@@ -237,9 +209,7 @@ class SessionSummaryService:
                     if match:
                         structured[key] = match.group(1).strip()
             
-            # Format 3: Handle simple section headers without numbers
             if not any(structured.values()):
-                # Try to extract sections by looking for common patterns
                 lines = summary_text.split('\n')
                 current_section = None
                 content_lines = []
@@ -249,7 +219,6 @@ class SessionSummaryService:
                     if not line:
                         continue
                     
-                    # Check for section headers
                     if 'main issue' in line.lower():
                         if current_section and content_lines:
                             structured[current_section] = ' '.join(content_lines)
@@ -278,11 +247,9 @@ class SessionSummaryService:
                     else:
                         content_lines.append(line)
                 
-                # Add final section
                 if current_section and content_lines:
                     structured[current_section] = ' '.join(content_lines)
             
-            # Fallback: if parsing failed, try alternative patterns
             if not any(structured.values()):
                 structured = self._fallback_parsing(summary_text)
             
@@ -317,7 +284,6 @@ class SessionSummaryService:
             if not line:
                 continue
                 
-            # Check for section headers
             if 'main issue' in line.lower() or 'primary concern' in line.lower():
                 if current_section and content_lines:
                     structured[current_section] = ' '.join(content_lines)
@@ -346,11 +312,9 @@ class SessionSummaryService:
             else:
                 content_lines.append(line)
         
-        # Add final section
         if current_section and content_lines:
             structured[current_section] = ' '.join(content_lines)
         
-        # If no sections found, put everything in main issue
         if not any(structured.values()):
             structured['mainIssue'] = text[:300] + '...' if len(text) > 300 else text
         
@@ -361,11 +325,9 @@ class SessionSummaryService:
         key_points = []
         user_messages = [msg.content for msg in messages if msg.role == 'user']
         
-        # Look for specific patterns
         for msg in user_messages:
             msg_lower = msg.lower()
             
-            # Check for specific issues mentioned
             if any(word in msg_lower for word in ['billing', 'bill', 'charge', 'payment']):
                 key_points.append("Customer has billing-related concerns")
             
@@ -381,7 +343,6 @@ class SessionSummaryService:
             if any(word in msg_lower for word in ['manager', 'supervisor', 'human', 'agent']):
                 key_points.append("Customer requested human assistance")
         
-        # Remove duplicates and limit to 5 key points
         return list(set(key_points))[:5]
 
     def _analyze_conversation_flow(self, messages: List[ChatMessage]) -> Dict[str, Any]:
@@ -392,7 +353,6 @@ class SessionSummaryService:
         escalation_triggers = []
         user_message_count = len([msg for msg in messages if msg.role == 'user'])
         
-        # Check for escalation patterns
         for msg in messages:
             if msg.role == 'user':
                 msg_lower = msg.content.lower()
@@ -403,7 +363,6 @@ class SessionSummaryService:
                 if len(msg.content) > 100:  # Long messages might indicate complexity
                     escalation_triggers.append('Complex issue requiring detailed explanation')
         
-        # Determine conversation pattern
         if user_message_count > 10:
             pattern = 'Extended conversation - multiple exchanges'
         elif user_message_count > 5:
@@ -425,7 +384,6 @@ class SessionSummaryService:
         actions.append("Review the conversation history above")
         actions.append("Acknowledge the customer's concerns")
         
-        # Issue-specific actions
         user_messages = ' '.join([msg.content.lower() for msg in messages if msg.role == 'user'])
         
         if any(word in user_messages for word in ['billing', 'bill', 'charge', 'payment']):
@@ -444,7 +402,6 @@ class SessionSummaryService:
             actions.append("Use empathetic communication approach")
             actions.append("Focus on resolving the core issue quickly")
         
-        # Add escalation-specific actions
         if escalation:
             actions.append(f"Address the escalation reason: {escalation.reason}")
             actions.append("Provide personalized solution")
@@ -453,9 +410,6 @@ class SessionSummaryService:
 
     def get_session_summary_cached(self, session_id: int) -> Dict[str, Any]:
         """Get session summary with caching (for future optimization)"""
-        # For now, just generate fresh summary
-        # In production, you might want to cache summaries
         return self.generate_session_summary(session_id)
 
-# Global instance
 session_summary_service = SessionSummaryService()

@@ -1,6 +1,3 @@
-"""
-RAG (Retrieval-Augmented Generation) service using ChromaDB
-"""
 import os
 import chromadb
 from chromadb.config import Settings
@@ -16,10 +13,8 @@ class RAGService:
         """Initialize RAG service with ChromaDB"""
         self.client = chromadb.PersistentClient(path="./chroma_db")
         
-        # Initialize embedding model
         self.embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
         
-        # Get or create collection
         try:
             self.collection = self.client.get_collection("telecom_knowledge")
         except:
@@ -27,24 +22,19 @@ class RAGService:
                 name="telecom_knowledge",
                 metadata={"description": "Telecom support knowledge base"}
             )
-        
-        # Auto-load PDFs from resources folder
         self._auto_load_pdfs()
     
     def _auto_load_pdfs(self):
         """Automatically load PDFs from resources folder on startup"""
         try:
-            # Check if collection already has documents
             try:
                 existing_docs = self.collection.get()
                 if existing_docs and existing_docs['ids'] and len(existing_docs['ids']) > 0:
                     logger.info(f"Collection already has {len(existing_docs['ids'])} documents, skipping auto-load")
                     return
             except Exception:
-                # Collection might be empty, continue with loading
                 pass
             
-            # Get documents from PDF processor
             pdf_documents = pdf_processor.get_documents_for_rag()
             
             if pdf_documents:
@@ -63,10 +53,7 @@ class RAGService:
     def reload_pdfs(self) -> bool:
         """Reload all PDFs from resources folder"""
         try:
-            # Clear existing collection
             self.collection.delete(where={})
-            
-            # Reload PDFs
             self._auto_load_pdfs()
             return True
             
@@ -77,14 +64,12 @@ class RAGService:
     def add_documents(self, documents: List[Dict[str, Any]]) -> bool:
         """Add documents to the knowledge base"""
         try:
-            # Get existing document IDs to avoid duplicates
             existing_ids = set()
             try:
                 existing_docs = self.collection.get()
                 if existing_docs and existing_docs['ids']:
                     existing_ids = set(existing_docs['ids'])
             except Exception:
-                # Collection might be empty, that's okay
                 pass
             
             texts = []
@@ -94,7 +79,6 @@ class RAGService:
             for i, doc in enumerate(documents):
                 doc_id = f"doc_{i}"
                 
-                # Skip if document already exists
                 if doc_id in existing_ids:
                     logger.warning(f"Document {doc_id} already exists, skipping")
                     continue
@@ -107,7 +91,6 @@ class RAGService:
                 })
                 ids.append(doc_id)
             
-            # Only add if we have new documents
             if texts:
                 self.collection.add(
                     documents=texts,
@@ -171,10 +154,7 @@ class RAGService:
         if not relevant_docs:
             return 0.3  # Low confidence if no relevant docs found
         
-        # Calculate average similarity
         avg_distance = sum(doc['distance'] for doc in relevant_docs) / len(relevant_docs)
-        
-        # Convert distance to confidence (lower distance = higher confidence)
         confidence = max(0.1, 1.0 - avg_distance)
         
         return min(1.0, confidence)

@@ -1,15 +1,10 @@
-"""
-Main Flask application for AI-powered telecom support chatbot
-"""
 import os
-# Fix huggingface tokenizers fork warning
+
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
-# Disable telemetry and error reporting to fix capture() warnings
 os.environ["LANGCHAIN_TRACING_V2"] = "false"
 os.environ["LANGCHAIN_ENDPOINT"] = ""
 os.environ["LANGCHAIN_API_KEY"] = ""
 os.environ["LANGCHAIN_PROJECT"] = ""
-# Disable other telemetry
 os.environ["HF_HUB_DISABLE_TELEMETRY"] = "1"
 os.environ["DISABLE_TELEMETRY"] = "1"
 
@@ -18,17 +13,13 @@ from flask_socketio import SocketIO
 from flask_cors import CORS
 from dotenv import load_dotenv
 
-# Load environment variables
 load_dotenv()
 
-# Import database and models
 from utils.db import db, init_db, get_db_uri
 from models import *
 
-# Import routes
 from routes import chat_bp, admin_bp
 
-# Import services
 from services.websocket_service import WebSocketService
 
 def create_app():

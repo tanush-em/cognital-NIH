@@ -1,7 +1,3 @@
-"""
-PDF Processing Service with OCR capabilities
-Handles PDF text extraction and OCR for scanned documents
-"""
 import os
 import logging
 from typing import List, Dict, Any, Optional
@@ -20,8 +16,6 @@ class PDFProcessor:
         """Initialize PDF processor with resources folder path"""
         self.resources_folder = resources_folder
         self.supported_formats = ['.pdf']
-        
-        # Ensure resources folder exists
         if not os.path.exists(self.resources_folder):
             os.makedirs(self.resources_folder)
             logger.info(f"Created resources folder: {self.resources_folder}")
@@ -42,14 +36,11 @@ class PDFProcessor:
     def extract_text_from_pdf(self, pdf_path: str) -> Dict[str, Any]:
         """Extract text from PDF using multiple methods"""
         try:
-            # Method 1: Try PyMuPDF first (fastest for text-based PDFs)
             text_content = self._extract_with_pymupdf(pdf_path)
             
-            # Method 2: If no text found, try pdfplumber
             if not text_content.strip():
                 text_content = self._extract_with_pdfplumber(pdf_path)
             
-            # Method 3: If still no text, use OCR
             if not text_content.strip():
                 text_content = self._extract_with_ocr(pdf_path)
             
@@ -115,19 +106,14 @@ class PDFProcessor:
             
             for page_num in range(len(doc)):
                 page = doc.load_page(page_num)
-                
-                # Convert page to image
-                mat = fitz.Matrix(2.0, 2.0)  # Increase resolution for better OCR
+                mat = fitz.Matrix(2.0, 2.0)  
                 pix = page.get_pixmap(matrix=mat)
                 img_data = pix.tobytes("png")
                 
-                # Convert to PIL Image
                 image = Image.open(io.BytesIO(img_data))
                 
-                # Preprocess image for better OCR
                 processed_image = self._preprocess_image_for_ocr(image)
                 
-                # Extract text using OCR
                 text = pytesseract.image_to_string(processed_image, lang='eng')
                 
                 if text.strip():
@@ -143,24 +129,17 @@ class PDFProcessor:
     def _preprocess_image_for_ocr(self, image: Image.Image) -> Image.Image:
         """Preprocess image to improve OCR accuracy"""
         try:
-            # Convert to numpy array
             img_array = np.array(image)
             
-            # Convert to grayscale if needed
             if len(img_array.shape) == 3:
                 img_array = cv2.cvtColor(img_array, cv2.COLOR_RGB2GRAY)
             
-            # Apply image preprocessing
-            # 1. Denoise
             img_array = cv2.medianBlur(img_array, 3)
             
-            # 2. Increase contrast
             img_array = cv2.convertScaleAbs(img_array, alpha=1.2, beta=10)
             
-            # 3. Apply threshold to get binary image
             _, img_array = cv2.threshold(img_array, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
             
-            # Convert back to PIL Image
             return Image.fromarray(img_array)
             
         except Exception as e:

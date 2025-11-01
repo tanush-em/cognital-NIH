@@ -1,6 +1,3 @@
-"""
-WebSocket service for real-time chat functionality
-"""
 from flask import request
 from flask_socketio import emit, join_room, leave_room
 from models.chat_models import ChatSession, ChatMessage
@@ -43,23 +40,19 @@ class WebSocketService:
             """Handle user joining a chat room"""
             try:
                 room_id = data.get('room_id')
-                user_type = data.get('user_type', 'user')  # user or agent
+                user_type = data.get('user_type', 'user')  
                 user_id = data.get('user_id')
                 
                 if not room_id:
                     emit('error', {'message': 'Room ID is required'})
                     return
                 
-                # Join the room
                 join_room(room_id)
                 
-                # Special handling for agents room
                 if room_id == 'agents' and user_type == 'agent':
-                    # Send existing pending escalations to the agent
                     self._send_existing_escalations()
                     return
                 
-                # Get or create session
                 session = self._get_or_create_session(room_id, user_id, user_type)
                 
                 if session:

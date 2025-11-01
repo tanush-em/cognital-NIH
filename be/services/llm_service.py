@@ -1,6 +1,3 @@
-"""
-LLM service using Groq API
-"""
 import os
 from groq import Groq
 from typing import Dict, Any, Optional
@@ -16,22 +13,16 @@ class LLMService:
             raise ValueError("GROQ_API_KEY environment variable is required")
         
         self.client = Groq(api_key=api_key)
-        self.model = "llama-3.1-8b-instant"  # Updated model
+        self.model = "llama-3.1-8b-instant"  
     
     def generate_response(self, 
                         user_message: str, 
                         context: str = "") -> Dict[str, Any]:
         """Generate AI response using Groq API"""
         try:
-            # Build conversation context
             system_prompt = self._build_system_prompt(context)
             messages = [{"role": "system", "content": system_prompt}]
-            
-            
-            # Add current user message
             messages.append({"role": "user", "content": user_message})
-            
-            # Generate response
             response = self.client.chat.completions.create(
                 model=self.model,
                 messages=messages,
@@ -87,7 +78,6 @@ class LLMService:
         message_lower = message.lower()
         frustration_score = sum(1 for keyword in frustration_keywords if keyword in message_lower)
         
-        # Calculate sentiment score (0-1, higher = more negative)
         sentiment_score = min(1.0, frustration_score / len(frustration_keywords))
         
         return {
