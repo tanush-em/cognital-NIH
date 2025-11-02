@@ -1,7 +1,3 @@
-"""
-Enhanced escalation service for AI-first telecom customer support
-Implements rule-based escalation with 4 categories: AI Performance, User Behavior, Topic Sensitivity, and Sentiment Signals
-"""
 from typing import Dict, Any, List, Optional
 from models.chat_models import ChatSession, Escalation
 from utils.db import db
@@ -24,7 +20,7 @@ class EscalationService:
             # User Behavior Category  
             'message_count_threshold': 10,
             'repeated_query_threshold': 3,
-            'session_duration_threshold': 1800,  # 30 minutes
+            'session_duration_threshold': 1800,  
             
             # Topic Sensitivity Category (Telecom-specific)
             'critical_telecom_topics': [
