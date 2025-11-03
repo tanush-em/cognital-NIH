@@ -58,7 +58,6 @@ Traditional customer support systems force users to wait in queues or navigate c
 - ChromaDB (Vector database for RAG)
 - Sentence Transformers (Embeddings)
 - Groq (LLM inference)
-- PostgreSQL (Relational database)
 
 **Frontend:**
 - React (User interfaces)
